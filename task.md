@@ -1,0 +1,28 @@
+# Tasks
+
+- [/] Project Setup & Planning <!-- id: 0 -->
+    - [x] Review `planV0.md` <!-- id: 1 -->
+    - [ ] Create `implementation_plan.md` with enhancements <!-- id: 2 -->
+    - [ ] Initialize project (Node.js, TypeScript, ESLint) <!-- id: 3 -->
+- [ ] Infrastructure Setup <!-- id: 4 -->
+    - [ ] Setup Elasticsearch (Docker or Cloud connection) <!-- id: 5 -->
+    - [ ] Create `app-logs` index and mappings <!-- id: 6 -->
+- [ ] Data Generation <!-- id: 7 -->
+    - [ ] Create log generator script (normal traffic + error spikes) <!-- id: 8 -->
+    - [ ] Verify bulk ingestion <!-- id: 9 -->
+- [ ] Backend Implementation <!-- id: 10 -->
+    - [ ] Setup Express server structure <!-- id: 11 -->
+    - [ ] Implement Elasticsearch client wrapper <!-- id: 12 -->
+    - [ ] Implement OpenAI/LLM client wrapper <!-- id: 13 -->
+- [ ] Agent Logic <!-- id: 14 -->
+    - [ ] Implement intent classification <!-- id: 15 -->
+    - [ ] Implement ES query generation (Function Calling) <!-- id: 16 -->
+    - [ ] Implement analysis & explanation logic <!-- id: 17 -->
+- [ ] Frontend Implementation <!-- id: 21 -->
+    - [ ] Initialize React + Vite project <!-- id: 22 -->
+    - [ ] Build Chat Interface <!-- id: 23 -->
+    - [ ] Build "Glass Box" Visualization Component <!-- id: 24 -->
+    - [ ] Integrate with Backend API <!-- id: 25 -->
+- [ ] Demo & Polish <!-- id: 18 -->
+    - [ ] Create "Glass Box" visualization (CLI or simple UI) <!-- id: 19 -->
+    - [ ] Rehearse demo flow <!-- id: 20 -->
