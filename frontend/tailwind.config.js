@@ -7,68 +7,29 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Cyberpunk palette
-        cyber: {
-          dark: '#0a0a0f',
-          darker: '#050508',
-          surface: '#12121a',
-          border: '#1e1e2e',
-          cyan: '#00f5ff',
-          purple: '#bf5af2',
-          pink: '#ff2d55',
-          green: '#30d158',
-          yellow: '#ffd60a',
-          orange: '#ff9f0a',
-        }
+        // Background shades
+        'bg-primary': '#0f1117',
+        'bg-secondary': '#161920',
+        'bg-tertiary': '#1c1f28',
+        'bg-elevated': '#232731',
+        // Accent colors
+        'accent-blue': '#3b82f6',
+        'accent-green': '#22c55e',
+        'accent-amber': '#f59e0b',
+        'accent-red': '#ef4444',
+        'accent-purple': '#a855f7',
       },
       fontFamily: {
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
-        display: ['Orbitron', 'sans-serif'],
-        body: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['IBM Plex Sans', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['IBM Plex Mono', 'SF Mono', 'Consolas', 'monospace'],
       },
-      animation: {
-        'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
-        'scan-line': 'scan-line 3s linear infinite',
-        'flicker': 'flicker 0.15s infinite',
-        'border-flow': 'border-flow 3s linear infinite',
-        'data-stream': 'data-stream 20s linear infinite',
+      fontSize: {
+        '2xs': ['10px', { lineHeight: '14px' }],
       },
-      keyframes: {
-        'pulse-glow': {
-          '0%, 100%': {
-            boxShadow: '0 0 5px currentColor, 0 0 10px currentColor, 0 0 15px currentColor',
-            opacity: '1'
-          },
-          '50%': {
-            boxShadow: '0 0 10px currentColor, 0 0 20px currentColor, 0 0 30px currentColor',
-            opacity: '0.8'
-          },
-        },
-        'scan-line': {
-          '0%': { transform: 'translateY(-100%)' },
-          '100%': { transform: 'translateY(100%)' },
-        },
-        'flicker': {
-          '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0.8' },
-        },
-        'border-flow': {
-          '0%': { backgroundPosition: '0% 50%' },
-          '50%': { backgroundPosition: '100% 50%' },
-          '100%': { backgroundPosition: '0% 50%' },
-        },
-        'data-stream': {
-          '0%': { backgroundPosition: '0% 0%' },
-          '100%': { backgroundPosition: '0% 100%' },
-        },
-      },
-      backgroundImage: {
-        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'cyber-grid': `linear-gradient(rgba(0, 245, 255, 0.03) 1px, transparent 1px),
-                       linear-gradient(90deg, rgba(0, 245, 255, 0.03) 1px, transparent 1px)`,
-      },
-      backgroundSize: {
-        'grid': '50px 50px',
+      boxShadow: {
+        'glow-blue': '0 0 20px rgba(59, 130, 246, 0.3)',
+        'glow-green': '0 0 12px rgba(34, 197, 94, 0.4)',
+        'elevated': '0 4px 24px rgba(0, 0, 0, 0.4)',
       },
     },
   },

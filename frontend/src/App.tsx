@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import ChatInterface from './components/ChatInterface';
-import GlassBox from './components/GlassBox';
+import ChatPanel from './components/ChatPanel';
+import ReasoningPanel from './components/ReasoningPanel';
 import type { ChatMessage, AgentResponse } from './types/agent';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -12,7 +12,6 @@ function App() {
   const [currentAgentResponse, setCurrentAgentResponse] = useState<AgentResponse | null>(null);
 
   const handleSendMessage = async (question: string) => {
-    // Add user message
     const userMessage: ChatMessage = {
       role: 'user',
       content: question,
@@ -21,14 +20,12 @@ function App() {
 
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
-    setCurrentAgentResponse(null); // Clear previous response
+    setCurrentAgentResponse(null);
 
     try {
       const response = await fetch(`${API_URL}/analyze`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question }),
       });
 
@@ -37,11 +34,8 @@ function App() {
       }
 
       const agentResponse: AgentResponse = await response.json();
-
-      // Update Glass Box with the full response
       setCurrentAgentResponse(agentResponse);
 
-      // Add assistant message
       const assistantMessage: ChatMessage = {
         role: 'assistant',
         content: agentResponse.final_answer,
@@ -53,10 +47,9 @@ function App() {
     } catch (error) {
       console.error('Error calling API:', error);
 
-      // Add error message
       const errorMessage: ChatMessage = {
         role: 'assistant',
-        content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}. Make sure the backend server is running.`,
+        content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}. Make sure the backend is running.`,
         timestamp: new Date().toISOString(),
       };
 
@@ -67,75 +60,58 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen bg-cyber-darker overflow-hidden relative">
-      {/* Global background effects */}
-      <div className="absolute inset-0 bg-gradient-to-br from-cyber-cyan/5 via-transparent to-cyber-purple/5 pointer-events-none" />
+    <div className="h-screen w-screen bg-[#0f1117] flex flex-col overflow-hidden">
+      {/* Header */}
+      <header className="h-14 border-b border-white/10 bg-[#0f1117] flex items-center justify-between px-5 flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+            <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div>
+            <h1 className="text-sm font-semibold text-white tracking-tight">ELSA</h1>
+            <p className="text-[10px] text-gray-500">Elastic Log Search Agent</p>
+          </div>
+        </div>
 
-      {/* Scan line effect */}
-      <motion.div
-        className="absolute inset-0 pointer-events-none z-50 opacity-[0.02]"
-        style={{
-          background: 'linear-gradient(transparent 50%, rgba(0, 0, 0, 0.5) 50%)',
-          backgroundSize: '100% 4px',
-        }}
-      />
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10">
+            <div className="status-online" />
+            <span className="text-[10px] text-gray-400 font-medium">Connected</span>
+          </div>
+        </div>
+      </header>
 
-      {/* Main layout */}
-      <div className="h-full w-full flex relative z-10">
-        {/* Chat Panel - 40% */}
+      {/* Main content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Chat Panel */}
         <motion.div
-          initial={{ x: -50, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="w-[40%] h-full border-r border-cyber-border/30"
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4 }}
+          className="w-[420px] border-r border-white/10 flex-shrink-0"
         >
-          <ChatInterface
+          <ChatPanel
             messages={messages}
             onSendMessage={handleSendMessage}
             isLoading={isLoading}
           />
         </motion.div>
 
-        {/* Glass Box Panel - 60% */}
+        {/* Reasoning Panel */}
         <motion.div
-          initial={{ x: 50, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="w-[60%] h-full"
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="flex-1 overflow-hidden"
         >
-          <GlassBox agentResponse={currentAgentResponse} />
+          <ReasoningPanel
+            agentResponse={currentAgentResponse}
+            isLoading={isLoading}
+          />
         </motion.div>
       </div>
-
-      {/* Corner decorations */}
-      <div className="absolute top-0 left-0 w-32 h-32 border-l-2 border-t-2 border-cyber-cyan/20 pointer-events-none" />
-      <div className="absolute top-0 right-0 w-32 h-32 border-r-2 border-t-2 border-cyber-purple/20 pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-32 h-32 border-l-2 border-b-2 border-cyber-purple/20 pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-32 h-32 border-r-2 border-b-2 border-cyber-cyan/20 pointer-events-none" />
-
-      {/* Status bar */}
-      <motion.div
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.5 }}
-        className="absolute bottom-0 left-0 right-0 h-6 bg-cyber-darker/80 border-t border-cyber-border/30 flex items-center justify-between px-4 text-[10px] font-mono text-zinc-600 z-20"
-      >
-        <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-cyber-green animate-pulse" />
-            SYSTEM ONLINE
-          </span>
-          <span className="text-zinc-700">|</span>
-          <span>ELASTICSEARCH: CONNECTED</span>
-          <span className="text-zinc-700">|</span>
-          <span>GPT-4 TURBO: READY</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <span>ELSA v1.0.0</span>
-          <span className="text-zinc-700">|</span>
-          <span className="text-cyber-cyan">HACKATHON EDITION</span>
-        </div>
-      </motion.div>
     </div>
   );
 }
