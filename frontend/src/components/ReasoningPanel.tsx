@@ -14,6 +14,9 @@ import {
   Info,
   Zap,
 } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import type { AgentResponse, ReasoningStep } from '../types/agent';
 
 interface ReasoningPanelProps {
@@ -40,64 +43,61 @@ export default function ReasoningPanel({ agentResponse, isLoading }: ReasoningPa
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#161920]">
-      {/* Header */}
-      <div className="h-14 border-b border-white/10 flex items-center justify-between px-5 flex-shrink-0 bg-[#0f1117]/50">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
-            <Brain className="w-4 h-4 text-gray-400" />
-          </div>
-          <div>
-            <h2 className="text-sm font-semibold text-white">Agent Reasoning</h2>
-            <p className="text-[10px] text-gray-500">
-              {agentResponse
-                ? `${agentResponse.reasoning_steps.length} steps • ${agentResponse.total_duration_ms}ms`
-                : 'Waiting for query...'}
-            </p>
-          </div>
-        </div>
-
-        {agentResponse && (
-          <div className={`
-            flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-medium
-            ${agentResponse.success
-              ? 'bg-green-500/10 text-green-400'
-              : 'bg-red-500/10 text-red-400'
-            }
-          `}>
-            {agentResponse.success
-              ? <><CheckCircle2 className="w-3 h-3" /> Complete</>
-              : <><XCircle className="w-3 h-3" /> Failed</>
-            }
-          </div>
-        )}
-      </div>
-
+    <div className="h-full flex flex-col bg-[#1a1a1a]">
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-5">
+      <div className="h-full overflow-y-auto px-32 py-10">
         <AnimatePresence mode="wait">
           {!agentResponse && !isLoading ? (
             <EmptyState />
           ) : isLoading && !agentResponse ? (
             <LoadingState />
           ) : agentResponse ? (
-            <motion.div
-              key="steps"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="space-y-3"
-            >
-              {agentResponse.reasoning_steps.map((step, idx) => (
-                <StepCard
-                  key={step.step_number}
-                  step={step}
-                  index={idx}
-                  isExpanded={expandedSteps.has(step.step_number)}
-                  onToggle={() => toggleStep(step.step_number)}
-                  isLast={idx === agentResponse.reasoning_steps.length - 1}
-                />
-              ))}
-            </motion.div>
+            <div>
+              {/* Metadata */}
+              <div className="flex items-center gap-4 mb-8 pb-6 border-b border-[#2a2a2a]">
+                <Badge
+                  variant={agentResponse.success ? "default" : "destructive"}
+                  className={`
+                    flex items-center gap-2 px-4 py-2 text-[13px] font-bold shadow-sm
+                    ${agentResponse.success
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20'
+                      : 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/20'
+                    }
+                  `}
+                >
+                  {agentResponse.success
+                    ? <><CheckCircle2 className="w-4 h-4" strokeWidth={2.5} /> Complete</>
+                    : <><XCircle className="w-4 h-4" strokeWidth={2.5} /> Failed</>
+                  }
+                </Badge>
+                <span className="text-[13px] text-gray-400 font-semibold">
+                  {agentResponse.reasoning_steps.length} steps
+                </span>
+                <span className="text-[13px] text-gray-400 font-semibold flex items-center gap-2">
+                  <Clock className="w-4 h-4" strokeWidth={2.5} />
+                  {agentResponse.total_duration_ms}ms
+                </span>
+              </div>
+
+              {/* Steps */}
+              <motion.div
+                key="steps"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="space-y-4"
+              >
+                {agentResponse.reasoning_steps.map((step, idx) => (
+                  <StepCard
+                    key={step.step_number}
+                    step={step}
+                    index={idx}
+                    isExpanded={expandedSteps.has(step.step_number)}
+                    onToggle={() => toggleStep(step.step_number)}
+                    isLast={idx === agentResponse.reasoning_steps.length - 1}
+                  />
+                ))}
+              </motion.div>
+            </div>
           ) : null}
         </AnimatePresence>
       </div>
@@ -108,33 +108,33 @@ export default function ReasoningPanel({ agentResponse, isLoading }: ReasoningPa
 function EmptyState() {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 30 }}
       animate={{ opacity: 1, y: 0 }}
-      className="h-full flex flex-col items-center justify-center"
+      className="h-full flex flex-col items-center justify-center py-20"
     >
-      <div className="w-20 h-20 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mb-6">
-        <Terminal className="w-8 h-8 text-gray-600" />
+      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center mb-8 shadow-2xl shadow-emerald-500/20">
+        <Terminal className="w-10 h-10 text-white" strokeWidth={2.5} />
       </div>
-      <h3 className="text-base font-medium text-gray-400 mb-2">No analysis yet</h3>
-      <p className="text-sm text-gray-600 text-center max-w-xs">
-        Ask a question to see the agent's reasoning process and Elasticsearch queries
+      <h3 className="text-2xl font-bold text-white mb-4">No reasoning data yet</h3>
+      <p className="text-[14px] text-gray-400 text-center max-w-lg leading-relaxed font-medium">
+        Ask a question to see the agent's step-by-step reasoning process, including search queries, tool calls, and data analysis.
       </p>
 
-      <div className="mt-8 grid grid-cols-3 gap-3">
+      <div className="mt-12 grid grid-cols-3 gap-5 max-w-xl">
         {[
-          { icon: Search, label: 'Search', color: 'text-blue-400' },
-          { icon: Database, label: 'Query', color: 'text-amber-400' },
-          { icon: Brain, label: 'Analyze', color: 'text-purple-400' },
+          { icon: Search, label: 'Search Logs', color: 'text-emerald-500' },
+          { icon: Database, label: 'Run Queries', color: 'text-blue-500' },
+          { icon: Brain, label: 'Analyze Data', color: 'text-purple-500' },
         ].map((item, i) => (
           <motion.div
             key={i}
-            initial={{ opacity: 0, y: 10 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 + i * 0.1 }}
-            className="flex flex-col items-center gap-2 p-4 rounded-xl bg-white/5 border border-white/5"
+            className="flex flex-col items-center gap-4 p-6 rounded-xl bg-[#2a2a2a] border border-[#3a3a3a]"
           >
-            <item.icon className={`w-5 h-5 ${item.color}`} />
-            <span className="text-[10px] text-gray-500">{item.label}</span>
+            <item.icon className={`w-7 h-7 ${item.color}`} strokeWidth={2.5} />
+            <span className="text-[12px] text-gray-300 font-bold text-center">{item.label}</span>
           </motion.div>
         ))}
       </div>
@@ -149,25 +149,25 @@ function LoadingState() {
       animate={{ opacity: 1 }}
       className="h-full flex flex-col items-center justify-center"
     >
-      <div className="relative w-16 h-16 mb-6">
+      <div className="relative w-20 h-20 mb-8">
         <motion.div
-          className="absolute inset-0 rounded-full border-2 border-blue-500/20"
-          animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.2, 0.5] }}
-          transition={{ duration: 2, repeat: Infinity }}
+          className="absolute inset-0 rounded-full border-4 border-emerald-500/20"
+          animate={{ scale: [1, 1.3, 1], opacity: [0.6, 0.2, 0.6] }}
+          transition={{ duration: 2.5, repeat: Infinity }}
         />
         <div className="absolute inset-0 flex items-center justify-center">
           <motion.div
             animate={{ rotate: 360 }}
             transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
-            className="w-12 h-12 rounded-full border-2 border-transparent border-t-blue-500"
+            className="w-16 h-16 rounded-full border-4 border-transparent border-t-emerald-500"
           />
         </div>
         <div className="absolute inset-0 flex items-center justify-center">
-          <Brain className="w-5 h-5 text-blue-400" />
+          <Brain className="w-7 h-7 text-emerald-500" strokeWidth={2.5} />
         </div>
       </div>
-      <p className="text-sm text-gray-400">Processing query...</p>
-      <p className="text-[10px] text-gray-600 mt-1">Searching logs and analyzing patterns</p>
+      <p className="text-lg font-bold text-white mb-2">Processing query...</p>
+      <p className="text-[14px] text-gray-400 font-medium">Searching logs and analyzing patterns</p>
     </motion.div>
   );
 }
@@ -196,66 +196,68 @@ function StepCard({ step, index, isExpanded, onToggle, isLast }: StepCardProps) 
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: -10 }}
+      initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.05 }}
+      transition={{ delay: index * 0.08, duration: 0.4 }}
       className="relative"
     >
       {/* Timeline connector */}
       {!isLast && (
-        <div className="absolute left-5 top-14 bottom-0 w-px bg-gradient-to-b from-white/10 to-transparent" />
+        <div className="absolute left-7 top-20 bottom-0 w-0.5 bg-gradient-to-b from-gray-300 via-gray-200 to-transparent" />
       )}
 
-      <div className={`
-        bg-[#1c1f28] border rounded-xl overflow-hidden transition-all duration-200
-        ${isExpanded ? 'border-white/20 shadow-lg' : 'border-white/10 hover:border-white/15'}
+      <Card className={`
+        border-2 overflow-hidden transition-all duration-300 bg-[#2a2a2a]
+        ${isExpanded ? 'border-emerald-500 shadow-lg shadow-emerald-500/20' : 'border-[#3a3a3a] hover:border-emerald-500/50'}
       `}>
-        {/* Header */}
-        <button
-          onClick={onToggle}
-          className="w-full text-left p-4 flex items-start gap-3 hover:bg-white/5 transition-colors"
-        >
+        <CardContent className="p-0">
+          {/* Header */}
+          <Button
+            variant="ghost"
+            onClick={onToggle}
+            className="w-full h-auto text-left p-5 flex items-start gap-4 hover:bg-[#3a3a3a]/50 transition-colors rounded-none"
+          >
           {/* Step indicator */}
           <div className={`
-            w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 border
-            ${isSuccess ? 'bg-green-500/10 border-green-500/30' : ''}
-            ${isTool && !isSuccess ? 'bg-blue-500/10 border-blue-500/30' : ''}
-            ${!isTool && !isSuccess ? 'bg-white/5 border-white/10' : ''}
+            w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0 border-2 shadow-lg transition-all
+            ${isSuccess ? 'bg-gradient-to-br from-emerald-500 to-teal-600 border-emerald-400 shadow-emerald-500/30' : ''}
+            ${isTool && !isSuccess ? 'bg-gradient-to-br from-blue-500 to-indigo-600 border-blue-400 shadow-blue-500/30' : ''}
+            ${!isTool && !isSuccess ? 'bg-gradient-to-br from-gray-100 to-gray-200 border-gray-300' : ''}
           `}>
-            <StepIcon className={`w-5 h-5 ${
-              isSuccess ? 'text-green-400' :
-              isTool ? 'text-blue-400' : 'text-gray-400'
-            }`} />
+            <StepIcon className={`w-6 h-6 ${
+              isSuccess ? 'text-white' :
+              isTool ? 'text-white' : 'text-gray-600'
+            }`} strokeWidth={2.5} />
           </div>
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-              <span className="text-[10px] font-semibold text-gray-400 bg-white/5 px-2 py-0.5 rounded">
+            <div className="flex items-center gap-2.5 mb-2 flex-wrap">
+              <Badge variant="secondary" className="text-[12px] font-bold text-gray-300 bg-[#3a3a3a] px-3 py-1 border border-[#4a4a4a] hover:bg-[#3a3a3a]">
                 Step {step.step_number}
-              </span>
+              </Badge>
               {hasToolCall && (
-                <span className="text-[10px] font-medium text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded">
+                <Badge variant="default" className="text-[12px] font-bold text-emerald-400 bg-emerald-500/20 px-3 py-1 border border-emerald-500/30 hover:bg-emerald-500/20">
                   {step.tool_call?.tool_name}
-                </span>
+                </Badge>
               )}
               {step.tool_result?.execution_time_ms && (
-                <span className="text-[10px] text-gray-500 flex items-center gap-1">
-                  <Zap className="w-3 h-3" />
+                <span className="text-[12px] text-gray-400 font-semibold flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5" strokeWidth={2.5} />
                   {step.tool_result.execution_time_ms}ms
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-300 line-clamp-2 leading-relaxed">{step.thought}</p>
+            <p className="text-[14px] text-gray-200 line-clamp-2 leading-relaxed font-medium">{step.thought}</p>
           </div>
 
           <motion.div
             animate={{ rotate: isExpanded ? 90 : 0 }}
-            transition={{ duration: 0.15 }}
-            className="text-gray-500 mt-1"
+            transition={{ duration: 0.2 }}
+            className="text-gray-400 mt-1"
           >
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-5 h-5" strokeWidth={2.5} />
           </motion.div>
-        </button>
+        </Button>
 
         {/* Expanded content */}
         <AnimatePresence>
@@ -264,19 +266,19 @@ function StepCard({ step, index, isExpanded, onToggle, isLast }: StepCardProps) 
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="border-t border-white/10 overflow-hidden"
+              transition={{ duration: 0.3 }}
+              className="border-t-2 border-[#3a3a3a] overflow-hidden"
             >
-              <div className="p-4 space-y-4 bg-black/20">
+              <div className="p-6 space-y-5 bg-[#1a1a1a]">
                 {/* Tool Arguments */}
                 <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Terminal className="w-3.5 h-3.5 text-green-400" />
-                    <h4 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <Terminal className="w-4 h-4 text-emerald-500" strokeWidth={2.5} />
+                    <h4 className="text-[13px] font-bold text-white uppercase tracking-wide">
                       Parameters
                     </h4>
                   </div>
-                  <pre className="bg-black/40 border border-white/5 rounded-lg p-3 overflow-x-auto text-xs text-green-400 font-mono">
+                  <pre className="bg-black border-2 border-emerald-500/30 rounded-lg p-4 overflow-x-auto text-[12px] text-emerald-400 font-mono leading-relaxed">
                     {JSON.stringify(step.tool_call?.arguments ?? {}, null, 2)}
                   </pre>
                 </div>
@@ -284,13 +286,13 @@ function StepCard({ step, index, isExpanded, onToggle, isLast }: StepCardProps) 
                 {/* Elasticsearch Query */}
                 {step.tool_result?.elasticsearch_query && (
                   <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Database className="w-3.5 h-3.5 text-amber-400" />
-                      <h4 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                    <div className="flex items-center gap-2.5 mb-3">
+                      <Database className="w-4 h-4 text-blue-500" strokeWidth={2.5} />
+                      <h4 className="text-[13px] font-bold text-white uppercase tracking-wide">
                         Elasticsearch Query
                       </h4>
                     </div>
-                    <pre className="bg-black/40 border border-white/5 rounded-lg p-3 overflow-x-auto max-h-48 text-xs text-amber-400 font-mono">
+                    <pre className="bg-black border-2 border-blue-500/30 rounded-lg p-4 overflow-x-auto max-h-64 text-[12px] text-blue-400 font-mono leading-relaxed">
                       {JSON.stringify(step.tool_result.elasticsearch_query, null, 2)}
                     </pre>
                   </div>
@@ -299,9 +301,9 @@ function StepCard({ step, index, isExpanded, onToggle, isLast }: StepCardProps) 
                 {/* Results */}
                 {step.tool_result && (
                   <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <Layers className="w-3.5 h-3.5 text-purple-400" />
-                      <h4 className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                    <div className="flex items-center gap-2.5 mb-3">
+                      <Layers className="w-4 h-4 text-purple-500" strokeWidth={2.5} />
+                      <h4 className="text-[13px] font-bold text-white uppercase tracking-wide">
                         Results
                       </h4>
                     </div>
@@ -312,14 +314,15 @@ function StepCard({ step, index, isExpanded, onToggle, isLast }: StepCardProps) 
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
+        </CardContent>
+      </Card>
     </motion.div>
   );
 }
 
 function ResultPreview({ result }: { result: unknown }): React.ReactElement {
   if (!result || typeof result !== 'object') {
-    return <pre className="bg-black/40 border border-white/5 rounded-lg p-3 text-xs text-gray-400 font-mono">{JSON.stringify(result)}</pre>;
+    return <pre className="bg-black border-2 border-[#3a3a3a] rounded-lg p-4 text-sm text-gray-400 font-mono">{JSON.stringify(result)}</pre>;
   }
 
   const resultObj = result as Record<string, unknown>;
@@ -327,38 +330,38 @@ function ResultPreview({ result }: { result: unknown }): React.ReactElement {
   // Handle search results
   if (resultObj.results && Array.isArray(resultObj.results)) {
     return (
-      <div className="space-y-3">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-gray-400">
-            Found <span className="text-white font-semibold">{resultObj.total as number}</span> results
+      <div className="space-y-4">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-300 font-semibold">
+            Found <span className="text-emerald-500 font-bold">{resultObj.total as number}</span> results
           </span>
-          <span className="text-gray-600">
+          <span className="text-gray-500 font-medium">
             showing {Math.min(resultObj.results.length, 3)}
           </span>
         </div>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {resultObj.results.slice(0, 3).map((log: Record<string, unknown>, idx: number) => (
             <motion.div
               key={idx}
-              initial={{ opacity: 0, y: 5 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.05 }}
-              className="p-3 rounded-lg bg-black/30 border border-white/5"
+              transition={{ delay: idx * 0.08 }}
+              className="p-4 rounded-lg bg-[#2a2a2a] border-2 border-[#3a3a3a] hover:border-[#4a4a4a] transition-colors"
             >
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-3 mb-3 flex-wrap">
                 <LogLevelBadge level={log.level as string} />
-                <span className="text-[10px] font-medium text-purple-400">{log.service as string}</span>
-                <span className="text-[10px] text-gray-600 ml-auto flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
+                <span className="text-[12px] font-bold text-purple-400 bg-purple-500/20 px-2 py-1 rounded border border-purple-500/30">{log.service as string}</span>
+                <span className="text-[12px] text-gray-400 font-semibold ml-auto flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" strokeWidth={2.5} />
                   {new Date(log.timestamp as string).toLocaleTimeString()}
                 </span>
               </div>
-              <p className="text-xs text-gray-400 font-mono truncate">{log.message as string}</p>
+              <p className="text-[13px] text-gray-300 font-mono leading-relaxed">{log.message as string}</p>
             </motion.div>
           ))}
         </div>
         {resultObj.results.length > 3 && (
-          <p className="text-[10px] text-gray-600 text-center">
+          <p className="text-[12px] text-gray-400 text-center font-semibold">
             + {resultObj.results.length - 3} more results
           </p>
         )}
@@ -370,29 +373,29 @@ function ResultPreview({ result }: { result: unknown }): React.ReactElement {
   if (resultObj.aggregations && Array.isArray(resultObj.aggregations)) {
     const totalErrors = resultObj.total_errors as number;
     return (
-      <div className="space-y-3">
-        <div className="text-xs text-gray-400">
-          Total: <span className="text-red-400 font-semibold">{totalErrors}</span> errors
+      <div className="space-y-4">
+        <div className="text-sm text-gray-300 font-semibold">
+          Total: <span className="text-red-500 font-bold">{totalErrors}</span> errors
         </div>
-        <div className="space-y-2">
+        <div className="space-y-3">
           {(resultObj.aggregations as Array<{ key: string; count: number }>).map((agg, idx) => (
             <motion.div
               key={idx}
-              initial={{ opacity: 0, x: -10 }}
+              initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: idx * 0.05 }}
-              className="relative"
+              transition={{ delay: idx * 0.08 }}
+              className="relative overflow-hidden rounded-lg bg-[#2a2a2a] border-2 border-[#3a3a3a]"
             >
-              <div className="flex items-center justify-between p-2.5 rounded-lg bg-black/30 border border-white/5">
-                <span className="text-sm font-mono text-gray-300">{agg.key}</span>
-                <span className="text-sm font-semibold text-red-400">{agg.count}</span>
+              <div className="flex items-center justify-between p-4 relative z-10">
+                <span className="text-[14px] font-mono font-semibold text-gray-200">{agg.key}</span>
+                <span className="text-[14px] font-bold text-red-500">{agg.count}</span>
               </div>
               {/* Progress bar */}
               <motion.div
-                className="absolute bottom-0 left-0 h-0.5 bg-gradient-to-r from-red-500 to-amber-500 rounded-full"
+                className="absolute bottom-0 left-0 h-1.5 bg-gradient-to-r from-red-500 via-orange-500 to-amber-500 rounded-br-lg"
                 initial={{ width: 0 }}
                 animate={{ width: `${(agg.count / totalErrors) * 100}%` }}
-                transition={{ delay: idx * 0.05 + 0.2, duration: 0.4 }}
+                transition={{ delay: idx * 0.08 + 0.3, duration: 0.6, ease: "easeOut" }}
               />
             </motion.div>
           ))}
@@ -403,25 +406,25 @@ function ResultPreview({ result }: { result: unknown }): React.ReactElement {
 
   // Fallback
   return (
-    <pre className="bg-black/40 border border-white/5 rounded-lg p-3 overflow-x-auto max-h-32 text-xs text-gray-400 font-mono">
+    <pre className="bg-black border-2 border-[#3a3a3a] rounded-lg p-4 overflow-x-auto max-h-48 text-sm text-gray-400 font-mono">
       {JSON.stringify(result, null, 2)}
     </pre>
   );
 }
 
 function LogLevelBadge({ level }: { level: string }) {
-  const config: Record<string, { icon: React.ElementType; bg: string; text: string }> = {
-    ERROR: { icon: XCircle, bg: 'bg-red-500/15', text: 'text-red-400' },
-    WARN: { icon: AlertTriangle, bg: 'bg-amber-500/15', text: 'text-amber-400' },
-    INFO: { icon: Info, bg: 'bg-blue-500/15', text: 'text-blue-400' },
-    DEBUG: { icon: Terminal, bg: 'bg-purple-500/15', text: 'text-purple-400' },
+  const config: Record<string, { icon: React.ElementType; bg: string; text: string; border: string }> = {
+    ERROR: { icon: XCircle, bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
+    WARN: { icon: AlertTriangle, bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30' },
+    INFO: { icon: Info, bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' },
+    DEBUG: { icon: Terminal, bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/30' },
   };
 
-  const { icon: Icon, bg, text } = config[level] || config.INFO;
+  const { icon: Icon, bg, text, border } = config[level] || config.INFO;
 
   return (
-    <span className={`${bg} ${text} text-[10px] font-semibold px-1.5 py-0.5 rounded flex items-center gap-1`}>
-      <Icon className="w-3 h-3" />
+    <span className={`${bg} ${text} border ${border} text-[11px] font-bold px-2 py-1 rounded-md flex items-center gap-1.5`}>
+      <Icon className="w-3.5 h-3.5" strokeWidth={2.5} />
       {level}
     </span>
   );
