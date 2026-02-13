@@ -63,9 +63,9 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen bg-[#1a1a1a] flex flex-col overflow-hidden">
+    <div className="h-screen w-screen bg-[#111111] flex flex-col overflow-hidden">
       {/* Header - Simple design */}
-      <header className="h-[72px] border-b border-[#2a2a2a] bg-[#1a1a1a] flex items-center justify-between px-10 flex-shrink-0 sticky top-0 z-10">
+      <header className="h-[72px] border-b border-[#2a2a2a] bg-[#191919] flex items-center justify-between flex-shrink-0 sticky top-0 z-10" style={{ paddingLeft: '80px', paddingRight: '80px' }}>
         <div className="flex items-center gap-4">
           <motion.div
             initial={{ rotate: -10, scale: 0.9 }}
@@ -90,7 +90,7 @@ function App() {
               <Button
                 onClick={() => setShowReasoningPanel(true)}
                 variant="outline"
-                className="flex items-center gap-2.5 px-5 py-2.5 h-auto rounded-xl bg-[#2a2a2a] hover:bg-[#3a3a3a] border-2 border-[#3a3a3a] hover:border-emerald-500 transition-all duration-300 group"
+                className="flex items-center gap-2.5 px-5 py-2.5 h-auto rounded-xl bg-[#262626] hover:bg-[#383838] border-2 border-[#383838] hover:border-emerald-500 transition-all duration-300 group"
               >
                 <svg className="w-4.5 h-4.5 text-emerald-500 group-hover:text-emerald-400 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -121,9 +121,9 @@ function App() {
 
       {/* Reasoning Panel Popup - Shadcn UI Dialog */}
       <Dialog open={showReasoningPanel} onOpenChange={setShowReasoningPanel}>
-        <DialogContent className="max-w-5xl h-[88vh] p-0 gap-0 bg-[#1a1a1a] border-[#2a2a2a]">
+        <DialogContent className="max-w-5xl h-[88vh] p-0 gap-0 bg-[#111111] border-[#262626]">
           {/* Popup Header */}
-          <div className="h-16 border-b border-[#2a2a2a] flex items-center justify-between px-8 bg-[#1a1a1a]">
+          <div className="h-16 border-b border-[#262626] flex items-center justify-between bg-[#111111]" style={{ paddingLeft: '40px', paddingRight: '40px' }}>
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-md shadow-emerald-500/20">
                 <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

@@ -44,7 +44,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
   return (
     <div className="h-full flex flex-col bg-transparent">
       {/* Messages area - Modern centered style */}
-      <div className="flex-1 overflow-y-auto px-48 py-20">
+      <div className="flex-1 overflow-y-auto" style={{ paddingLeft: '80px', paddingRight: '80px', paddingTop: '80px', paddingBottom: '80px' }}>
         <AnimatePresence mode="popLayout">
           {messages.length === 0 ? (
             <motion.div
@@ -52,7 +52,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.5 }}
-              className="max-w-2xl mx-auto"
+              style={{ maxWidth: '768px', margin: '0 auto' }}
             >
               <div className="text-center pt-40">
                 <motion.h2
@@ -81,7 +81,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
                   <Button
                     onClick={() => setShowSuggestions(true)}
                     variant="outline"
-                    className="inline-flex items-center gap-2.5 px-6 py-3 h-auto rounded-xl bg-[#2a2a2a] hover:bg-[#3a3a3a] border-2 border-[#3a3a3a] hover:border-emerald-500 transition-all duration-300 group"
+                    className="inline-flex items-center gap-2.5 px-6 py-3 h-auto rounded-xl bg-[#262626] hover:bg-[#383838] border-2 border-[#383838] hover:border-emerald-500 transition-all duration-300 group"
                   >
                     <span className="text-[14px] text-gray-300 font-semibold group-hover:text-white transition-colors">
                       View Example Queries
@@ -91,7 +91,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
               </div>
             </motion.div>
           ) : (
-            <div className="max-w-2xl mx-auto space-y-10">
+            <div className="space-y-10" style={{ maxWidth: '768px', margin: '0 auto' }}>
               {messages.map((msg, idx) => (
                 <motion.div
                   key={idx}
@@ -104,7 +104,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
                   <div className={`
                     w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 mt-1 shadow-lg
                     ${msg.role === 'user'
-                      ? 'bg-[#2a2a2a] border border-[#3a3a3a]'
+                      ? 'bg-[#262626] border border-[#383838]'
                       : 'bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-emerald-500/20'
                     }
                   `}>
@@ -177,8 +177,8 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
       </div>
 
       {/* Input area - Centered with right-aligned button */}
-      <div className="px-48 pb-12 pt-8 border-t border-[#2a2a2a]">
-        <div className="max-w-2xl mx-auto">
+      <div className="border-t border-[#2a2a2a]" style={{ paddingLeft: '80px', paddingRight: '80px', paddingBottom: '48px', paddingTop: '32px', backgroundColor: '#151515' }}>
+        <div style={{ maxWidth: '768px', margin: '0 auto' }}>
           <form onSubmit={handleSubmit} className="flex items-center gap-3">
             <Input
               ref={inputRef}
@@ -187,7 +187,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask anything about your logs..."
               disabled={isLoading}
-              className="flex-1 px-5 py-4 h-auto text-[15px] bg-[#2a2a2a] border-2 border-[#3a3a3a] rounded-xl text-white placeholder-gray-500 focus-visible:border-emerald-500 focus-visible:ring-4 focus-visible:ring-emerald-500/10 transition-all disabled:opacity-50 disabled:bg-[#2a2a2a] font-medium"
+              className="flex-1 px-5 py-4 h-auto text-[15px] bg-[#262626] border-2 border-[#383838] rounded-xl text-white placeholder-gray-500 focus-visible:border-emerald-500 focus-visible:ring-4 focus-visible:ring-emerald-500/10 transition-all disabled:opacity-50 disabled:bg-[#262626] font-medium"
             />
             <Button
               type="submit"
@@ -206,9 +206,9 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
 
       {/* Suggestions Popup - Shadcn UI Dialog */}
       <Dialog open={showSuggestions} onOpenChange={setShowSuggestions}>
-        <DialogContent className="max-w-3xl p-0 gap-0 bg-[#1a1a1a] border-[#2a2a2a] [&>button]:hidden">
+        <DialogContent className="max-w-3xl p-0 gap-0 bg-[#111111] border-[#262626] [&>button]:hidden">
           {/* Popup Header */}
-          <div className="px-12 py-10 border-b border-[#2a2a2a] bg-[#1a1a1a]">
+          <div className="border-b border-[#262626] bg-[#111111]" style={{ padding: '40px' }}>
             <DialogTitle className="text-[28px] font-bold text-white mb-3">Example Queries</DialogTitle>
             <DialogDescription className="text-[16px] text-gray-400 font-normal leading-relaxed">
               Get started with these common questions
@@ -216,7 +216,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
           </div>
 
           {/* Popup Content */}
-          <div className="px-12 py-10">
+          <div style={{ padding: '40px' }}>
             <div className="grid grid-cols-1 gap-4">
               {suggestedQueries.map((query, idx) => (
                 <motion.div
@@ -228,7 +228,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
                   <Button
                     onClick={() => handleSuggestionClick(query.text)}
                     variant="outline"
-                    className="w-full h-auto text-left px-8 py-5 rounded-xl bg-[#2a2a2a] hover:bg-[#3a3a3a] border-2 border-[#3a3a3a] hover:border-emerald-500 transition-all duration-300 group cursor-pointer"
+                    className="w-full h-auto text-left px-8 py-5 rounded-xl bg-[#262626] hover:bg-[#383838] border-2 border-[#383838] hover:border-emerald-500 transition-all duration-300 group cursor-pointer"
                   >
                     <span className="text-[16px] text-gray-300 group-hover:text-white transition-colors font-medium">
                       {query.text}

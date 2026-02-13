@@ -43,9 +43,9 @@ export default function ReasoningPanel({ agentResponse, isLoading }: ReasoningPa
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#1a1a1a]">
+    <div className="h-full flex flex-col bg-[#111111]">
       {/* Content */}
-      <div className="h-full overflow-y-auto px-32 py-10">
+      <div className="h-full overflow-y-auto" style={{ paddingLeft: '40px', paddingRight: '40px', paddingTop: '40px', paddingBottom: '40px' }}>
         <AnimatePresence mode="wait">
           {!agentResponse && !isLoading ? (
             <EmptyState />
@@ -54,7 +54,7 @@ export default function ReasoningPanel({ agentResponse, isLoading }: ReasoningPa
           ) : agentResponse ? (
             <div>
               {/* Metadata */}
-              <div className="flex items-center gap-4 mb-8 pb-6 border-b border-[#2a2a2a]">
+              <div className="flex items-center gap-4 mb-8 pb-6 border-b border-[#262626]">
                 <Badge
                   variant={agentResponse.success ? "default" : "destructive"}
                   className={`
@@ -131,7 +131,7 @@ function EmptyState() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 + i * 0.1 }}
-            className="flex flex-col items-center gap-4 p-6 rounded-xl bg-[#2a2a2a] border border-[#3a3a3a]"
+            className="flex flex-col items-center gap-4 p-6 rounded-xl bg-[#262626] border border-[#383838]"
           >
             <item.icon className={`w-7 h-7 ${item.color}`} strokeWidth={2.5} />
             <span className="text-[12px] text-gray-300 font-bold text-center">{item.label}</span>
@@ -203,19 +203,19 @@ function StepCard({ step, index, isExpanded, onToggle, isLast }: StepCardProps) 
     >
       {/* Timeline connector */}
       {!isLast && (
-        <div className="absolute left-7 top-20 bottom-0 w-0.5 bg-gradient-to-b from-gray-300 via-gray-200 to-transparent" />
+        <div className="absolute left-7 top-20 bottom-0 w-0.5 bg-gradient-to-b from-[#383838] via-[#2a2a2a] to-transparent" />
       )}
 
       <Card className={`
-        border-2 overflow-hidden transition-all duration-300 bg-[#2a2a2a]
-        ${isExpanded ? 'border-emerald-500 shadow-lg shadow-emerald-500/20' : 'border-[#3a3a3a] hover:border-emerald-500/50'}
+        border-2 overflow-hidden transition-all duration-300 bg-[#262626]
+        ${isExpanded ? 'border-emerald-500 shadow-lg shadow-emerald-500/20' : 'border-[#383838] hover:border-emerald-500/50'}
       `}>
         <CardContent className="p-0">
           {/* Header */}
           <Button
             variant="ghost"
             onClick={onToggle}
-            className="w-full h-auto text-left p-5 flex items-start gap-4 hover:bg-[#3a3a3a]/50 transition-colors rounded-none"
+            className="w-full h-auto text-left p-5 flex items-start gap-4 hover:bg-[#383838]/50 transition-colors rounded-none"
           >
           {/* Step indicator */}
           <div className={`
@@ -232,7 +232,7 @@ function StepCard({ step, index, isExpanded, onToggle, isLast }: StepCardProps) 
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2.5 mb-2 flex-wrap">
-              <Badge variant="secondary" className="text-[12px] font-bold text-gray-300 bg-[#3a3a3a] px-3 py-1 border border-[#4a4a4a] hover:bg-[#3a3a3a]">
+              <Badge variant="secondary" className="text-[12px] font-bold text-gray-300 bg-[#383838] px-3 py-1 border border-[#4a4a4a] hover:bg-[#383838]">
                 Step {step.step_number}
               </Badge>
               {hasToolCall && (
@@ -267,9 +267,9 @@ function StepCard({ step, index, isExpanded, onToggle, isLast }: StepCardProps) 
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: 0.3 }}
-              className="border-t-2 border-[#3a3a3a] overflow-hidden"
+              className="border-t-2 border-[#383838] overflow-hidden"
             >
-              <div className="p-6 space-y-5 bg-[#1a1a1a]">
+              <div className="p-6 space-y-5 bg-[#111111]">
                 {/* Tool Arguments */}
                 <div>
                   <div className="flex items-center gap-2.5 mb-3">
@@ -322,7 +322,7 @@ function StepCard({ step, index, isExpanded, onToggle, isLast }: StepCardProps) 
 
 function ResultPreview({ result }: { result: unknown }): React.ReactElement {
   if (!result || typeof result !== 'object') {
-    return <pre className="bg-black border-2 border-[#3a3a3a] rounded-lg p-4 text-sm text-gray-400 font-mono">{JSON.stringify(result)}</pre>;
+    return <pre className="bg-black border-2 border-[#383838] rounded-lg p-4 text-sm text-gray-400 font-mono">{JSON.stringify(result)}</pre>;
   }
 
   const resultObj = result as Record<string, unknown>;
@@ -346,7 +346,7 @@ function ResultPreview({ result }: { result: unknown }): React.ReactElement {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: idx * 0.08 }}
-              className="p-4 rounded-lg bg-[#2a2a2a] border-2 border-[#3a3a3a] hover:border-[#4a4a4a] transition-colors"
+              className="p-4 rounded-lg bg-[#262626] border-2 border-[#383838] hover:border-[#4a4a4a] transition-colors"
             >
               <div className="flex items-center gap-3 mb-3 flex-wrap">
                 <LogLevelBadge level={log.level as string} />
@@ -384,7 +384,7 @@ function ResultPreview({ result }: { result: unknown }): React.ReactElement {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: idx * 0.08 }}
-              className="relative overflow-hidden rounded-lg bg-[#2a2a2a] border-2 border-[#3a3a3a]"
+              className="relative overflow-hidden rounded-lg bg-[#262626] border-2 border-[#383838]"
             >
               <div className="flex items-center justify-between p-4 relative z-10">
                 <span className="text-[14px] font-mono font-semibold text-gray-200">{agg.key}</span>
@@ -406,7 +406,7 @@ function ResultPreview({ result }: { result: unknown }): React.ReactElement {
 
   // Fallback
   return (
-    <pre className="bg-black border-2 border-[#3a3a3a] rounded-lg p-4 overflow-x-auto max-h-48 text-sm text-gray-400 font-mono">
+    <pre className="bg-black border-2 border-[#383838] rounded-lg p-4 overflow-x-auto max-h-48 text-sm text-gray-400 font-mono">
       {JSON.stringify(result, null, 2)}
     </pre>
   );
