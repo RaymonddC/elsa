@@ -1,47 +1,54 @@
 /**
- * Initialize Elasticsearch index with proper mapping
- * Run this before generating logs
+ * Initialize Elasticsearch indices for wallet analysis
+ * Run this before using the app: npm run init-index
  */
 
-import { esClient, LOG_INDEX } from '../src/config/elasticsearch';
-import { LOG_INDEX_MAPPING } from '../src/types/log';
+import { esClient, WALLET_TX_INDEX, WALLET_SUMMARY_INDEX } from '../src/config/elasticsearch';
+import { WALLET_TX_INDEX_MAPPING, WALLET_SUMMARY_INDEX_MAPPING } from '../src/types/wallet';
 
-async function initIndex() {
+async function initIndices() {
   try {
     console.log('Connecting to Elasticsearch...');
 
-    // Check if index exists
-    const indexExists = await esClient.indices.exists({ index: LOG_INDEX });
-
-    if (indexExists) {
-      console.log(`Index "${LOG_INDEX}" already exists. Deleting...`);
-      await esClient.indices.delete({ index: LOG_INDEX });
+    // Initialize wallet-transactions index
+    const txExists = await esClient.indices.exists({ index: WALLET_TX_INDEX });
+    if (txExists) {
+      console.log(`Index "${WALLET_TX_INDEX}" already exists. Deleting...`);
+      await esClient.indices.delete({ index: WALLET_TX_INDEX });
     }
 
-    // Create index with mapping
-    console.log(`Creating index "${LOG_INDEX}" with mapping...`);
+    console.log(`Creating index "${WALLET_TX_INDEX}" with mapping...`);
     await esClient.indices.create({
-      index: LOG_INDEX,
-      body: LOG_INDEX_MAPPING,
+      index: WALLET_TX_INDEX,
+      body: WALLET_TX_INDEX_MAPPING,
     });
+    console.log(`Index "${WALLET_TX_INDEX}" created successfully!`);
 
-    console.log('Index created successfully!');
+    // Initialize wallet-summaries index
+    const summaryExists = await esClient.indices.exists({ index: WALLET_SUMMARY_INDEX });
+    if (summaryExists) {
+      console.log(`Index "${WALLET_SUMMARY_INDEX}" already exists. Deleting...`);
+      await esClient.indices.delete({ index: WALLET_SUMMARY_INDEX });
+    }
 
-    // Verify index health
-    const health = await esClient.cluster.health({ index: LOG_INDEX });
-    console.log(`Index health: ${health.status}`);
+    console.log(`Creating index "${WALLET_SUMMARY_INDEX}" with mapping...`);
+    await esClient.indices.create({
+      index: WALLET_SUMMARY_INDEX,
+      body: WALLET_SUMMARY_INDEX_MAPPING,
+    });
+    console.log(`Index "${WALLET_SUMMARY_INDEX}" created successfully!`);
 
-    // Show index info
-    const indexInfo = await esClient.indices.get({ index: LOG_INDEX });
-    console.log('\nIndex mapping created:');
-    console.log(JSON.stringify(indexInfo[LOG_INDEX].mappings, null, 2));
+    // Verify health
+    const health = await esClient.cluster.health({ index: `${WALLET_TX_INDEX},${WALLET_SUMMARY_INDEX}` });
+    console.log(`\nCluster health: ${health.status}`);
 
+    console.log('\nAll indices initialized successfully!');
   } catch (error) {
-    console.error('Error initializing index:', error);
+    console.error('Error initializing indices:', error);
     process.exit(1);
   } finally {
     await esClient.close();
   }
 }
 
-initIndex();
+initIndices();

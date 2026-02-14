@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, User, Bot, Sparkles, AlertCircle, Clock, Database } from 'lucide-react';
+import { Send, User, Bot, Wallet, TrendingUp, Shield } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import type { ChatMessage } from '../types/agent';
 
 interface ChatPanelProps {
@@ -10,13 +13,14 @@ interface ChatPanelProps {
 }
 
 const suggestedQueries = [
-  { icon: AlertCircle, text: "Show recent errors", color: "text-red-400" },
-  { icon: Database, text: "Which service has the most failures?", color: "text-purple-400" },
-  { icon: Clock, text: "What happened in the last 15 minutes?", color: "text-blue-400" },
+  { icon: Wallet, text: "Check this Bitcoin wallet 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", color: "text-emerald-600", bg: "bg-gradient-to-br from-emerald-50 to-emerald-100/50", border: "border-emerald-200" },
+  { icon: TrendingUp, text: "Analyze Ethereum wallet 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", color: "text-blue-600", bg: "bg-gradient-to-br from-blue-50 to-blue-100/50", border: "border-blue-200" },
+  { icon: Shield, text: "Detect anomalies in wallet 1BzkoGfrLtL59ZGjhKfvBwy47DEb6oba5f", color: "text-red-600", bg: "bg-gradient-to-br from-red-50 to-red-100/50", border: "border-red-200" },
 ];
 
 export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPanelProps) {
   const [input, setInput] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -32,86 +36,100 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
     }
   };
 
+  const handleSuggestionClick = (text: string) => {
+    setShowSuggestions(false);
+    onSendMessage(text);
+  };
+
   return (
-    <div className="h-full flex flex-col bg-[#0f1117]">
-      {/* Messages area */}
-      <div className="flex-1 overflow-y-auto p-4">
+    <div className="h-full flex flex-col bg-transparent">
+      {/* Messages area - Modern centered style */}
+      <div className="flex-1 overflow-y-auto" style={{ paddingLeft: '80px', paddingRight: '80px', paddingTop: '80px', paddingBottom: '80px' }}>
         <AnimatePresence mode="popLayout">
           {messages.length === 0 ? (
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="h-full flex flex-col items-center justify-center px-4"
+              transition={{ duration: 0.5 }}
+              style={{ maxWidth: '768px', margin: '0 auto' }}
             >
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center mb-6">
-                <Sparkles className="w-7 h-7 text-blue-400" />
-              </div>
+              <div className="text-center pt-40">
+                <motion.h2
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="text-5xl font-bold text-white mb-6 tracking-tight"
+                >
+                  What can I help you with?
+                </motion.h2>
+                <motion.p
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-[16px] text-gray-400 leading-relaxed max-w-2xl mx-auto font-normal mb-12"
+                >
+                  Paste a Bitcoin or Ethereum wallet address and I'll fetch its transaction history,
+                  analyze patterns, and detect anomalies on the blockchain.
+                </motion.p>
 
-              <h2 className="text-lg font-semibold text-white mb-2">Ask about your logs</h2>
-              <p className="text-sm text-gray-500 text-center mb-8 max-w-[280px]">
-                I'll search and analyze your application logs to find patterns and issues.
-              </p>
-
-              <div className="w-full space-y-2">
-                <p className="text-[10px] text-gray-600 font-medium uppercase tracking-wider mb-3">Try asking</p>
-                {suggestedQueries.map((query, idx) => (
-                  <motion.button
-                    key={idx}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.1 }}
-                    onClick={() => onSendMessage(query.text)}
-                    className="w-full text-left p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 group flex items-center gap-3"
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                >
+                  <Button
+                    onClick={() => setShowSuggestions(true)}
+                    variant="outline"
+                    className="inline-flex items-center gap-2.5 px-6 py-3 h-auto rounded-xl bg-[#262626] hover:bg-[#383838] border-2 border-[#383838] hover:border-emerald-500 transition-all duration-300 group"
                   >
-                    <div className={`w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center ${query.color}`}>
-                      <query.icon className="w-4 h-4" />
-                    </div>
-                    <span className="text-sm text-gray-400 group-hover:text-gray-200 transition-colors">
-                      {query.text}
+                    <span className="text-[14px] text-gray-300 font-semibold group-hover:text-white transition-colors">
+                      View Example Queries
                     </span>
-                  </motion.button>
-                ))}
+                  </Button>
+                </motion.div>
               </div>
             </motion.div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-10" style={{ maxWidth: '768px', margin: '0 auto' }}>
               {messages.map((msg, idx) => (
                 <motion.div
                   key={idx}
-                  initial={{ opacity: 0, y: 10 }}
+                  initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+                  transition={{ duration: 0.4, ease: "easeOut" }}
+                  className="flex gap-6"
                 >
                   {/* Avatar */}
                   <div className={`
-                    w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0
+                    w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 mt-1 shadow-lg
                     ${msg.role === 'user'
-                      ? 'bg-blue-500/20 border border-blue-500/30'
-                      : 'bg-white/5 border border-white/10'
+                      ? 'bg-[#262626] border border-[#383838]'
+                      : 'bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-emerald-500/20'
                     }
                   `}>
                     {msg.role === 'user'
-                      ? <User className="w-4 h-4 text-blue-400" />
-                      : <Bot className="w-4 h-4 text-gray-400" />
+                      ? <User className="w-5 h-5 text-gray-300" strokeWidth={2.5} />
+                      : <Bot className="w-5 h-5 text-white" strokeWidth={2.5} />
                     }
                   </div>
 
-                  {/* Message bubble */}
-                  <div className={`
-                    max-w-[85%] rounded-2xl px-4 py-3
-                    ${msg.role === 'user'
-                      ? 'bg-blue-500 text-white rounded-tr-md'
-                      : 'bg-white/5 border border-white/10 rounded-tl-md'
-                    }
-                  `}>
-                    <p className={`text-sm leading-relaxed whitespace-pre-wrap ${msg.role === 'user' ? 'text-white' : 'text-gray-300'}`}>
+                  {/* Message content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className="text-[14px] font-bold text-white">
+                        {msg.role === 'user' ? 'You' : 'ELSA'}
+                      </span>
+                      <span className="text-[12px] text-gray-500 font-medium">
+                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <div className={`
+                      text-[15px] leading-relaxed whitespace-pre-wrap font-normal
+                      ${msg.role === 'user' ? 'text-gray-300' : 'text-gray-200'}
+                    `}>
                       {msg.content}
-                    </p>
-                    <p className={`text-[10px] mt-2 ${msg.role === 'user' ? 'text-blue-200' : 'text-gray-600'}`}>
-                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+                    </div>
                   </div>
                 </motion.div>
               ))}
@@ -120,31 +138,32 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
               <AnimatePresence>
                 {isLoading && (
                   <motion.div
-                    initial={{ opacity: 0, y: 10 }}
+                    initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className="flex gap-3"
+                    className="flex gap-6"
                   >
-                    <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
-                      <Bot className="w-4 h-4 text-gray-400" />
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center mt-1 shadow-lg shadow-emerald-500/20">
+                      <Bot className="w-5 h-5 text-white" strokeWidth={2.5} />
                     </div>
-                    <div className="bg-white/5 border border-white/10 rounded-2xl rounded-tl-md px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="flex gap-1">
+                    <div className="flex-1">
+                      <span className="text-[14px] font-bold text-white mb-3 block">ELSA</span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex gap-2">
                           {[0, 1, 2].map((i) => (
                             <motion.div
                               key={i}
-                              className="w-1.5 h-1.5 rounded-full bg-blue-400"
-                              animate={{ opacity: [0.3, 1, 0.3] }}
+                              className="w-2.5 h-2.5 rounded-full bg-emerald-500"
+                              animate={{ opacity: [0.3, 1, 0.3], scale: [0.9, 1, 0.9] }}
                               transition={{
-                                duration: 1,
+                                duration: 1.4,
                                 repeat: Infinity,
                                 delay: i * 0.2,
                               }}
                             />
                           ))}
                         </div>
-                        <span className="text-xs text-gray-500">Analyzing...</span>
+                        <span className="text-[15px] text-gray-400 font-medium">Analyzing wallet...</span>
                       </div>
                     </div>
                   </motion.div>
@@ -157,32 +176,70 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
         </AnimatePresence>
       </div>
 
-      {/* Input area */}
-      <div className="p-4 border-t border-white/10">
-        <form onSubmit={handleSubmit}>
-          <div className="relative">
-            <input
+      {/* Input area - Centered with right-aligned button */}
+      <div className="border-t border-[#2a2a2a]" style={{ paddingLeft: '80px', paddingRight: '80px', paddingBottom: '48px', paddingTop: '32px', backgroundColor: '#151515' }}>
+        <div style={{ maxWidth: '768px', margin: '0 auto' }}>
+          <form onSubmit={handleSubmit} className="flex items-center gap-3">
+            <Input
               ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about your logs..."
+              placeholder="Enter a Bitcoin or Ethereum wallet address..."
               disabled={isLoading}
-              className="w-full px-4 py-3 pr-12 text-sm bg-[#1c1f28] border border-white/10 rounded-xl text-white placeholder-gray-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all disabled:opacity-50"
+              className="flex-1 px-5 py-4 h-auto text-[15px] bg-[#262626] border-2 border-[#383838] rounded-xl text-white placeholder-gray-500 focus-visible:border-emerald-500 focus-visible:ring-4 focus-visible:ring-emerald-500/10 transition-all disabled:opacity-50 disabled:bg-[#262626] font-medium"
             />
-            <button
+            <Button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-lg bg-blue-500 hover:bg-blue-600 disabled:opacity-30 disabled:hover:bg-blue-500 flex items-center justify-center transition-colors"
+              className="px-6 py-4 h-auto rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-30 disabled:from-emerald-500 disabled:to-emerald-600 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-emerald-500/20 min-w-[120px]"
             >
-              <Send className="w-4 h-4 text-white" />
-            </button>
-          </div>
-        </form>
-        <p className="text-[10px] text-gray-600 text-center mt-3">
-          ELSA uses GPT-4 to analyze Elasticsearch logs
-        </p>
+              <Send className="w-5 h-5 text-white" strokeWidth={2.5} />
+              <span className="text-[14px] text-white font-bold">Send</span>
+            </Button>
+          </form>
+          <p className="text-[12px] text-gray-500 text-center mt-4 font-medium">
+            Powered by AI • ELSA can make mistakes, please verify critical information
+          </p>
+        </div>
       </div>
+
+      {/* Suggestions Popup - Shadcn UI Dialog */}
+      <Dialog open={showSuggestions} onOpenChange={setShowSuggestions}>
+        <DialogContent className="max-w-3xl p-0 gap-0 bg-[#111111] border-[#262626] [&>button]:hidden">
+          {/* Popup Header */}
+          <div className="border-b border-[#262626] bg-[#111111]" style={{ padding: '40px' }}>
+            <DialogTitle className="text-[28px] font-bold text-white mb-3">Example Queries</DialogTitle>
+            <DialogDescription className="text-[16px] text-gray-400 font-normal leading-relaxed">
+              Get started with these common questions
+            </DialogDescription>
+          </div>
+
+          {/* Popup Content */}
+          <div style={{ padding: '40px' }}>
+            <div className="grid grid-cols-1 gap-4">
+              {suggestedQueries.map((query, idx) => (
+                <motion.div
+                  key={idx}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.1, duration: 0.4 }}
+                >
+                  <Button
+                    onClick={() => handleSuggestionClick(query.text)}
+                    variant="outline"
+                    className="w-full h-auto text-left px-8 py-5 rounded-xl bg-[#262626] hover:bg-[#383838] border-2 border-[#383838] hover:border-emerald-500 transition-all duration-300 group cursor-pointer"
+                  >
+                    <span className="text-[16px] text-gray-300 group-hover:text-white transition-colors font-medium">
+                      {query.text}
+                    </span>
+                  </Button>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

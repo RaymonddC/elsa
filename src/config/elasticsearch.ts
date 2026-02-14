@@ -9,7 +9,8 @@ export const esClient = new Client({
   node: ELASTICSEARCH_URL,
 });
 
-export const LOG_INDEX = 'application-logs';
+export const WALLET_TX_INDEX = 'wallet-transactions';
+export const WALLET_SUMMARY_INDEX = 'wallet-summaries';
 
 // Test connection
 export async function testConnection(): Promise<boolean> {
