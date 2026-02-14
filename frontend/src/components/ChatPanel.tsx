@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, User, Bot, Sparkles, AlertCircle, Clock, Database } from 'lucide-react';
+import { Send, User, Bot, Wallet, TrendingUp, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -13,9 +13,9 @@ interface ChatPanelProps {
 }
 
 const suggestedQueries = [
-  { icon: AlertCircle, text: "Show recent errors", color: "text-red-600", bg: "bg-gradient-to-br from-red-50 to-red-100/50", border: "border-red-200" },
-  { icon: Database, text: "Which service has the most failures?", color: "text-emerald-600", bg: "bg-gradient-to-br from-emerald-50 to-emerald-100/50", border: "border-emerald-200" },
-  { icon: Clock, text: "What happened in the last 15 minutes?", color: "text-blue-600", bg: "bg-gradient-to-br from-blue-50 to-blue-100/50", border: "border-blue-200" },
+  { icon: Wallet, text: "Check this Bitcoin wallet 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa", color: "text-emerald-600", bg: "bg-gradient-to-br from-emerald-50 to-emerald-100/50", border: "border-emerald-200" },
+  { icon: TrendingUp, text: "Analyze Ethereum wallet 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", color: "text-blue-600", bg: "bg-gradient-to-br from-blue-50 to-blue-100/50", border: "border-blue-200" },
+  { icon: Shield, text: "Detect anomalies in wallet 1BzkoGfrLtL59ZGjhKfvBwy47DEb6oba5f", color: "text-red-600", bg: "bg-gradient-to-br from-red-50 to-red-100/50", border: "border-red-200" },
 ];
 
 export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPanelProps) {
@@ -69,8 +69,8 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
                   transition={{ delay: 0.3 }}
                   className="text-[16px] text-gray-400 leading-relaxed max-w-2xl mx-auto font-normal mb-12"
                 >
-                  Ask me anything about your logs. I can search for errors, analyze patterns,
-                  identify failing services, and help troubleshoot issues across your infrastructure.
+                  Paste a Bitcoin or Ethereum wallet address and I'll fetch its transaction history,
+                  analyze patterns, and detect anomalies on the blockchain.
                 </motion.p>
 
                 <motion.div
@@ -163,7 +163,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
                             />
                           ))}
                         </div>
-                        <span className="text-[15px] text-gray-400 font-medium">Analyzing logs...</span>
+                        <span className="text-[15px] text-gray-400 font-medium">Analyzing wallet...</span>
                       </div>
                     </div>
                   </motion.div>
@@ -185,7 +185,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask anything about your logs..."
+              placeholder="Enter a Bitcoin or Ethereum wallet address..."
               disabled={isLoading}
               className="flex-1 px-5 py-4 h-auto text-[15px] bg-[#262626] border-2 border-[#383838] rounded-xl text-white placeholder-gray-500 focus-visible:border-emerald-500 focus-visible:ring-4 focus-visible:ring-emerald-500/10 transition-all disabled:opacity-50 disabled:bg-[#262626] font-medium"
             />

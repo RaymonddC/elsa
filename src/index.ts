@@ -1,8 +1,8 @@
 /**
- * Express API Server for ELSA Log Analysis Agent
+ * Express API Server for ELSA Crypto Wallet Analyzer
  *
  * Endpoints:
- * - POST /analyze - Analyze a user question about logs
+ * - POST /analyze - Analyze a user question about a Bitcoin or Ethereum wallet
  * - GET /health - Health check
  */
 
@@ -117,12 +117,12 @@ async function start() {
 
     app.listen(PORT, () => {
       console.log(`\n${'='.repeat(80)}`);
-      console.log(`ELSA Log Analysis Agent API`);
+      console.log(`ELSA Bitcoin & Ethereum Wallet Analyzer API`);
       console.log(`Server running on http://localhost:${PORT}`);
       console.log(`Health check: http://localhost:${PORT}/health`);
       console.log(`Elasticsearch: ${esConnected ? '✓ Connected' : '✗ Disconnected'}`);
       console.log('='.repeat(80));
-      console.log('\nReady to analyze logs!\n');
+      console.log('\nReady to analyze wallets!\n');
     });
   } catch (error) {
     console.error('Failed to start server:', error);

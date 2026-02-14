@@ -1,10 +1,10 @@
 /**
- * Agent Orchestrator - The brain of the log analysis agent
+ * Agent Orchestrator - The brain of the crypto wallet analysis agent
  *
  * Implements a "Glass Box" agent that:
- * 1. Takes a user question
- * 2. Calls LLM with available tools
- * 3. Executes tool calls against Elasticsearch
+ * 1. Takes a user question about a Bitcoin or Ethereum wallet
+ * 2. Calls LLM with available tools (fetch, search, summarize, detect anomalies)
+ * 3. Executes tool calls against blockchain.info / Etherscan API + Elasticsearch
  * 4. Logs EVERY step for transparency
  * 5. Returns final answer with complete reasoning trace
  */
@@ -20,30 +20,41 @@ const openai = new OpenAI({
 // Dynamic system prompt with current time
 function getSystemPrompt(): string {
   const now = new Date();
-  const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000);
-  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
-  return `You are an expert log analysis agent. Your job is to help users understand application logs, detect anomalies, and diagnose issues.
+  return `You are an expert blockchain analyst supporting both Bitcoin and Ethereum. Your job is to help users investigate wallet addresses — fetching transaction history, identifying patterns, and detecting suspicious or anomalous activity.
 
-IMPORTANT - Current Time Context:
-- Current time (NOW): ${now.toISOString()}
-- 15 minutes ago: ${fifteenMinutesAgo.toISOString()}
-- 1 hour ago: ${oneHourAgo.toISOString()}
+Current time: ${now.toISOString()}
 
-When users ask about "last 15 minutes" or "last hour", use these exact timestamps for your time_range queries.
+SUPPORTED CHAINS:
+- Bitcoin: addresses start with 1, 3, or bc1 (e.g., 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa)
+- Ethereum: addresses start with 0x and are 42 characters (e.g., 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045)
 
-You have access to tools to search and aggregate logs from an Elasticsearch index. Use these tools to answer user questions accurately.
+The chain is auto-detected from the address format. You do not need to specify it.
 
-Guidelines:
-- ALWAYS use the current timestamps provided above for time ranges
-- When you detect patterns or anomalies, explain the root cause
-- If you see cascading errors, trace them back to the origin
-- Be specific: mention service names, error types, timestamps
-- If you need more information, make additional tool calls
+WORKFLOW — Follow this order for wallet analysis:
+1. Use fetch_wallet_data to pull transactions and cache them in Elasticsearch.
+2. Use get_wallet_summary to retrieve the cached overview (balance, totals, tx count).
+3. Use search_transactions to drill into specific transactions (filter by direction, value range, time range).
+4. Use detect_anomalies to run algorithmic checks for suspicious patterns.
 
-Available services: api-gateway, auth-service, user-service, payment-service, notification-service
+ANALYSIS GUIDELINES:
+- Bitcoin: values in satoshis (1 BTC = 100,000,000 satoshis). Report as BTC.
+- Ethereum: values in wei (1 ETH = 10^18 wei). Report as ETH. Gas prices in Gwei.
+- Cite specific transaction hashes (tx_hash) when discussing individual transactions.
+- Explain anomaly types clearly: what the pattern means and why it could be suspicious.
+- If the wallet has many transactions, fetch in batches and summarize trends.
 
-Common error types: DB_TIMEOUT, AUTH_SERVICE_TIMEOUT, NETWORK_ERROR, VALIDATION_ERROR`;
+ANOMALY TYPES TO WATCH FOR:
+- Large transactions: statistically unusual amounts (above mean + 2× std deviation)
+- Rapid sequences / mixing: many transactions in short bursts (potential tumbler/bot usage)
+- Round-number transactions: suspiciously exact amounts (1.0, 0.5, 0.1 BTC/ETH)
+- Dormant wallet reactivation: long inactivity followed by sudden activity
+- Fan-out (Bitcoin): single input going to many outputs (distribution pattern)
+- Fan-in (Bitcoin): many inputs consolidating into few outputs (aggregation pattern)
+- Failed transactions (Ethereum): reverted or errored transactions
+- High gas prices (Ethereum): unusually high gas indicating urgency or MEV
+
+Always provide a clear summary with: chain, total balance, transaction count, date range of activity, and any anomalies found.`;
 }
 
 const MAX_ITERATIONS = 10; // Prevent infinite loops
@@ -180,15 +191,3 @@ export async function analyzeQuestion(question: string): Promise<AgentResponse> 
   }
 }
 
-/**
- * Helper to get a default time range (last N minutes)
- */
-export function getDefaultTimeRange(minutesAgo: number = 60): { from: string; to: string } {
-  const to = new Date();
-  const from = new Date(to.getTime() - minutesAgo * 60 * 1000);
-
-  return {
-    from: from.toISOString(),
-    to: to.toISOString(),
-  };
-}

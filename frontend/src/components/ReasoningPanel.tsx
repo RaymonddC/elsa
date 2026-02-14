@@ -11,8 +11,12 @@ import {
   Terminal,
   AlertTriangle,
   XCircle,
-  Info,
   Zap,
+  Wallet,
+  Download,
+  Shield,
+  ArrowUpRight,
+  ArrowDownLeft,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -117,14 +121,14 @@ function EmptyState() {
       </div>
       <h3 className="text-2xl font-bold text-white mb-4">No reasoning data yet</h3>
       <p className="text-[14px] text-gray-400 text-center max-w-lg leading-relaxed font-medium">
-        Ask a question to see the agent's step-by-step reasoning process, including search queries, tool calls, and data analysis.
+        Submit a Bitcoin wallet address to see the agent's step-by-step reasoning process, including blockchain queries, anomaly detection, and analysis.
       </p>
 
       <div className="mt-12 grid grid-cols-3 gap-5 max-w-xl">
         {[
-          { icon: Search, label: 'Search Logs', color: 'text-emerald-500' },
-          { icon: Database, label: 'Run Queries', color: 'text-blue-500' },
-          { icon: Brain, label: 'Analyze Data', color: 'text-purple-500' },
+          { icon: Wallet, label: 'Fetch Wallet', color: 'text-emerald-500' },
+          { icon: Search, label: 'Search Txns', color: 'text-blue-500' },
+          { icon: Shield, label: 'Detect Anomalies', color: 'text-purple-500' },
         ].map((item, i) => (
           <motion.div
             key={i}
@@ -167,7 +171,7 @@ function LoadingState() {
         </div>
       </div>
       <p className="text-lg font-bold text-white mb-2">Processing query...</p>
-      <p className="text-[14px] text-gray-400 font-medium">Searching logs and analyzing patterns</p>
+      <p className="text-[14px] text-gray-400 font-medium">Fetching blockchain data and analyzing wallet</p>
     </motion.div>
   );
 }
@@ -184,8 +188,10 @@ function StepCard({ step, index, isExpanded, onToggle, isLast }: StepCardProps) 
   const hasToolCall = !!step.tool_call;
 
   const getStepIcon = () => {
-    if (step.tool_call?.tool_name === 'search_logs') return Search;
-    if (step.tool_call?.tool_name === 'aggregate_errors') return Layers;
+    if (step.tool_call?.tool_name === 'fetch_wallet_data') return Download;
+    if (step.tool_call?.tool_name === 'search_transactions') return Search;
+    if (step.tool_call?.tool_name === 'get_wallet_summary') return Wallet;
+    if (step.tool_call?.tool_name === 'detect_anomalies') return Shield;
     if (isLast) return CheckCircle2;
     return Brain;
   };
@@ -327,20 +333,47 @@ function ResultPreview({ result }: { result: unknown }): React.ReactElement {
 
   const resultObj = result as Record<string, unknown>;
 
-  // Handle search results
-  if (resultObj.results && Array.isArray(resultObj.results)) {
+  // Handle wallet summary (both BTC and ETH)
+  if (resultObj.address && (resultObj.final_balance_btc !== undefined || resultObj.final_balance_eth !== undefined)) {
+    const isEth = resultObj.chain === 'ethereum' || resultObj.final_balance_eth !== undefined;
+    const unit = isEth ? 'ETH' : 'BTC';
+    const balance = isEth ? resultObj.final_balance_eth : resultObj.final_balance_btc;
+    const received = isEth ? resultObj.total_received_eth : resultObj.total_received_btc;
+    const sent = isEth ? resultObj.total_sent_eth : resultObj.total_sent_btc;
+    return (
+      <div className="space-y-3">
+        <div className="p-4 rounded-lg bg-[#262626] border-2 border-[#383838]">
+          <div className="flex items-center gap-2 mb-3">
+            <Wallet className="w-4 h-4 text-emerald-500" strokeWidth={2.5} />
+            <span className="text-[13px] font-bold text-white">Wallet Summary ({isEth ? 'Ethereum' : 'Bitcoin'})</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-[13px]">
+            <div><span className="text-gray-400">Address:</span> <span className="text-gray-200 font-mono">{(resultObj.address as string).slice(0, 16)}...</span></div>
+            <div><span className="text-gray-400">Balance:</span> <span className="text-emerald-400 font-bold">{balance as number} {unit}</span></div>
+            {received !== undefined && <div><span className="text-gray-400">Total Received:</span> <span className="text-gray-200">{received as number} {unit}</span></div>}
+            {sent !== undefined && <div><span className="text-gray-400">Total Sent:</span> <span className="text-gray-200">{sent as number} {unit}</span></div>}
+            <div><span className="text-gray-400">Transactions:</span> <span className="text-gray-200">{resultObj.n_tx as number}</span></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Handle transaction search results
+  if (resultObj.transactions && Array.isArray(resultObj.transactions)) {
+    const txs = resultObj.transactions as Array<Record<string, unknown>>;
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between text-sm">
           <span className="text-gray-300 font-semibold">
-            Found <span className="text-emerald-500 font-bold">{resultObj.total as number}</span> results
+            Found <span className="text-emerald-500 font-bold">{resultObj.total as number}</span> transactions
           </span>
           <span className="text-gray-500 font-medium">
-            showing {Math.min(resultObj.results.length, 3)}
+            showing {Math.min(txs.length, 3)}
           </span>
         </div>
         <div className="space-y-3">
-          {resultObj.results.slice(0, 3).map((log: Record<string, unknown>, idx: number) => (
+          {txs.slice(0, 3).map((tx, idx) => (
             <motion.div
               key={idx}
               initial={{ opacity: 0, y: 10 }}
@@ -349,56 +382,67 @@ function ResultPreview({ result }: { result: unknown }): React.ReactElement {
               className="p-4 rounded-lg bg-[#262626] border-2 border-[#383838] hover:border-[#4a4a4a] transition-colors"
             >
               <div className="flex items-center gap-3 mb-3 flex-wrap">
-                <LogLevelBadge level={log.level as string} />
-                <span className="text-[12px] font-bold text-purple-400 bg-purple-500/20 px-2 py-1 rounded border border-purple-500/30">{log.service as string}</span>
+                <DirectionBadge direction={tx.direction as string} />
+                <span className="text-[12px] font-bold text-emerald-400">{(tx.value_btc || tx.value_eth) as number} {tx.value_eth !== undefined ? 'ETH' : 'BTC'}</span>
                 <span className="text-[12px] text-gray-400 font-semibold ml-auto flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5" strokeWidth={2.5} />
-                  {new Date(log.timestamp as string).toLocaleTimeString()}
+                  {new Date(tx.time as string).toLocaleString()}
                 </span>
               </div>
-              <p className="text-[13px] text-gray-300 font-mono leading-relaxed">{log.message as string}</p>
+              <p className="text-[12px] text-gray-400 font-mono truncate">{tx.tx_hash as string}</p>
             </motion.div>
           ))}
         </div>
-        {resultObj.results.length > 3 && (
+        {txs.length > 3 && (
           <p className="text-[12px] text-gray-400 text-center font-semibold">
-            + {resultObj.results.length - 3} more results
+            + {txs.length - 3} more transactions
           </p>
         )}
       </div>
     );
   }
 
-  // Handle aggregation results
-  if (resultObj.aggregations && Array.isArray(resultObj.aggregations)) {
-    const totalErrors = resultObj.total_errors as number;
+  // Handle anomaly results
+  if (resultObj.anomalies && Array.isArray(resultObj.anomalies)) {
+    const anomalies = resultObj.anomalies as Array<Record<string, unknown>>;
+    const totalAnomalies = resultObj.total_anomalies as number;
     return (
       <div className="space-y-4">
         <div className="text-sm text-gray-300 font-semibold">
-          Total: <span className="text-red-500 font-bold">{totalErrors}</span> errors
+          Detected <span className="text-amber-500 font-bold">{totalAnomalies}</span> anomalies
         </div>
         <div className="space-y-3">
-          {(resultObj.aggregations as Array<{ key: string; count: number }>).map((agg, idx) => (
+          {anomalies.slice(0, 4).map((anomaly, idx) => (
             <motion.div
               key={idx}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: idx * 0.08 }}
-              className="relative overflow-hidden rounded-lg bg-[#262626] border-2 border-[#383838]"
+              className="p-4 rounded-lg bg-[#262626] border-2 border-[#383838]"
             >
-              <div className="flex items-center justify-between p-4 relative z-10">
-                <span className="text-[14px] font-mono font-semibold text-gray-200">{agg.key}</span>
-                <span className="text-[14px] font-bold text-red-500">{agg.count}</span>
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-500" strokeWidth={2.5} />
+                <span className="text-[13px] font-bold text-amber-400">{anomaly.type as string}</span>
+                <span className="text-[11px] text-gray-400 ml-auto">{(anomaly.details as Record<string, unknown>)?.count as number || 1} occurrence(s)</span>
               </div>
-              {/* Progress bar */}
-              <motion.div
-                className="absolute bottom-0 left-0 h-1.5 bg-gradient-to-r from-red-500 via-orange-500 to-amber-500 rounded-br-lg"
-                initial={{ width: 0 }}
-                animate={{ width: `${(agg.count / totalErrors) * 100}%` }}
-                transition={{ delay: idx * 0.08 + 0.3, duration: 0.6, ease: "easeOut" }}
-              />
+              <p className="text-[12px] text-gray-400">{anomaly.description as string}</p>
             </motion.div>
           ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Handle fetch_wallet_data results
+  if (resultObj.indexed_count !== undefined && resultObj.address) {
+    return (
+      <div className="p-4 rounded-lg bg-[#262626] border-2 border-[#383838]">
+        <div className="flex items-center gap-2 mb-2">
+          <Download className="w-4 h-4 text-emerald-500" strokeWidth={2.5} />
+          <span className="text-[13px] font-bold text-white">Data Fetched</span>
+        </div>
+        <div className="text-[13px] text-gray-300">
+          Indexed <span className="text-emerald-400 font-bold">{resultObj.indexed_count as number}</span> transactions for <span className="font-mono text-gray-400">{(resultObj.address as string).slice(0, 16)}...</span>
         </div>
       </div>
     );
@@ -412,20 +456,14 @@ function ResultPreview({ result }: { result: unknown }): React.ReactElement {
   );
 }
 
-function LogLevelBadge({ level }: { level: string }) {
-  const config: Record<string, { icon: React.ElementType; bg: string; text: string; border: string }> = {
-    ERROR: { icon: XCircle, bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
-    WARN: { icon: AlertTriangle, bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-amber-500/30' },
-    INFO: { icon: Info, bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' },
-    DEBUG: { icon: Terminal, bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/30' },
-  };
-
-  const { icon: Icon, bg, text, border } = config[level] || config.INFO;
+function DirectionBadge({ direction }: { direction: string }) {
+  const isIncoming = direction === 'incoming';
+  const Icon = isIncoming ? ArrowDownLeft : ArrowUpRight;
 
   return (
-    <span className={`${bg} ${text} border ${border} text-[11px] font-bold px-2 py-1 rounded-md flex items-center gap-1.5`}>
+    <span className={`${isIncoming ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-red-500/20 text-red-400 border-red-500/30'} border text-[11px] font-bold px-2 py-1 rounded-md flex items-center gap-1.5`}>
       <Icon className="w-3.5 h-3.5" strokeWidth={2.5} />
-      {level}
+      {isIncoming ? 'IN' : 'OUT'}
     </span>
   );
 }

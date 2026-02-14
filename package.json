@@ -1,7 +1,7 @@
 {
-  "name": "elsa-log-analysis-agent",
+  "name": "elsa-wallet-analyzer",
   "version": "1.0.0",
-  "description": "AI-powered log analysis agent with Glass Box transparency",
+  "description": "AI-powered Bitcoin & Ethereum wallet analyzer with Glass Box transparency",
   "main": "dist/index.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\" --names \"backend,frontend\" --prefix-colors \"cyan,magenta\"",
@@ -10,13 +10,17 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint src --ext .ts",
-    "generate-logs": "tsx scripts/generate_incident.ts",
+    "generate-sample": "tsx scripts/generate_sample_data.ts",
     "init-index": "tsx scripts/init_elasticsearch.ts"
   },
   "keywords": [
     "elasticsearch",
     "ai",
-    "logs",
+    "bitcoin",
+    "ethereum",
+    "blockchain",
+    "wallet",
+    "etherscan",
     "openai",
     "agent"
   ],
