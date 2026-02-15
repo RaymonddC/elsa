@@ -12,6 +12,9 @@ import dotenv from 'dotenv';
 import { analyzeQuestion } from './agent/orchestrator';
 import { testConnection } from './config/elasticsearch';
 import { z } from 'zod';
+import authRoutes from './routes/auth';
+import chatRoutes from './routes/chats';
+import { requireAuth, type AuthRequest } from './middleware/auth';
 
 dotenv.config();
 
@@ -27,6 +30,12 @@ app.use((req, _res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
+
+// Auth routes (public)
+app.use(authRoutes);
+
+// Chat history routes (protected)
+app.use(chatRoutes);
 
 // Health check endpoint
 app.get('/health', async (_req, res) => {
@@ -51,12 +60,13 @@ const AnalyzeRequestSchema = z.object({
   question: z.string().min(1, 'Question cannot be empty'),
 });
 
-app.post('/analyze', async (req, res) => {
+app.post('/analyze', requireAuth, async (req: AuthRequest, res) => {
   try {
     // Validate request
     const { question } = AnalyzeRequestSchema.parse(req.body);
 
     console.log(`\n${'='.repeat(80)}`);
+    console.log(`User: ${req.user?.email}`);
     console.log(`Question: ${question}`);
     console.log('='.repeat(80));
 

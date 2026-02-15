@@ -1,40 +1,123 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { useAuth } from './contexts/AuthContext';
+import LoginPage from './components/LoginPage';
 import ChatPanel from './components/ChatPanel';
+import ChatSidebar from './components/ChatSidebar';
+import UserMenu from './components/UserMenu';
 import ReasoningPanel from './components/ReasoningPanel';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Lightbulb } from 'lucide-react';
 import type { ChatMessage, AgentResponse } from './types/agent';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 function App() {
+  const { user, token, isLoading: authLoading } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentAgentResponse, setCurrentAgentResponse] = useState<AgentResponse | null>(null);
-  const [showReasoningPanel, setShowReasoningPanel] = useState(false);
+  const [showReasoning, setShowReasoning] = useState(false);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [sidebarRefresh, setSidebarRefresh] = useState(0);
+
+  // Auth loading state
+  if (authLoading) {
+    return (
+      <div className="h-screen w-screen bg-[#111] flex items-center justify-center">
+        <div className="text-sm text-gray-400">Loading...</div>
+      </div>
+    );
+  }
+
+  // Not logged in
+  if (!user || !token) {
+    return <LoginPage />;
+  }
+
+  const handleNewChat = () => {
+    setMessages([]);
+    setCurrentSessionId(null);
+    setCurrentAgentResponse(null);
+  };
+
+  const handleSessionSelect = async (sessionId: string) => {
+    try {
+      const response = await fetch(`${API_URL}/chats/${sessionId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) return;
+      const session = await response.json();
+      setMessages(session.messages || []);
+      setCurrentSessionId(sessionId);
+      setCurrentAgentResponse(null);
+
+      // Find the last assistant message with agentResponse
+      const lastAssistant = [...(session.messages || [])].reverse().find(
+        (m: ChatMessage) => m.role === 'assistant' && m.agentResponse
+      );
+      if (lastAssistant?.agentResponse) {
+        setCurrentAgentResponse(lastAssistant.agentResponse);
+      }
+    } catch (error) {
+      console.error('Failed to load session:', error);
+    }
+  };
+
+  const saveSession = async (updatedMessages: ChatMessage[], sessionId: string | null) => {
+    try {
+      if (!sessionId) {
+        // Create new session
+        const title = updatedMessages[0]?.content.substring(0, 60) || 'New Chat';
+        const createRes = await fetch(`${API_URL}/chats`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ title }),
+        });
+        if (!createRes.ok) return null;
+        const session = await createRes.json();
+        setCurrentSessionId(session.id);
+
+        await fetch(`${API_URL}/chats/${session.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ messages: updatedMessages }),
+        });
+
+        setSidebarRefresh((n) => n + 1);
+        return session.id;
+      } else {
+        await fetch(`${API_URL}/chats/${sessionId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ messages: updatedMessages }),
+        });
+        return sessionId;
+      }
+    } catch (error) {
+      console.error('Failed to save session:', error);
+      return sessionId;
+    }
+  };
 
   const handleSendMessage = async (question: string) => {
-    const userMessage: ChatMessage = {
-      role: 'user',
-      content: question,
-      timestamp: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
+    const userMessage: ChatMessage = { role: 'user', content: question, timestamp: new Date().toISOString() };
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     setIsLoading(true);
     setCurrentAgentResponse(null);
+
+    // Save with user message immediately (creates session if needed)
+    const sessionId = await saveSession(updatedMessages, currentSessionId);
 
     try {
       const response = await fetch(`${API_URL}/analyze`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ question }),
       });
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error(`API error: ${response.statusText}`);
 
       const agentResponse: AgentResponse = await response.json();
       setCurrentAgentResponse(agentResponse);
@@ -46,101 +129,94 @@ function App() {
         timestamp: new Date().toISOString(),
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      const finalMessages = [...updatedMessages, assistantMessage];
+      setMessages(finalMessages);
+      await saveSession(finalMessages, sessionId);
     } catch (error) {
-      console.error('Error calling API:', error);
-
       const errorMessage: ChatMessage = {
         role: 'assistant',
         content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}. Make sure the backend is running.`,
         timestamp: new Date().toISOString(),
       };
-
-      setMessages((prev) => [...prev, errorMessage]);
+      const finalMessages = [...updatedMessages, errorMessage];
+      setMessages(finalMessages);
+      await saveSession(finalMessages, sessionId);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="h-screen w-screen bg-[#111111] flex flex-col overflow-hidden">
-      {/* Header - Simple design */}
-      <header className="h-[72px] border-b border-[#2a2a2a] bg-[#191919] flex items-center justify-between flex-shrink-0 sticky top-0 z-10" style={{ paddingLeft: '80px', paddingRight: '80px' }}>
-        <div className="flex items-center gap-4">
-          <motion.div
-            initial={{ rotate: -10, scale: 0.9 }}
-            animate={{ rotate: 0, scale: 1 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-            className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-xl shadow-emerald-500/20"
-          >
-            <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              <path d="M9 12l2 2 4-4" />
-            </svg>
-          </motion.div>
-          <h1 className="text-[20px] font-bold text-white tracking-tight">ELSA</h1>
-        </div>
+    <div className="h-screen w-screen bg-[#111] flex overflow-hidden">
+      {/* Sidebar */}
+      <ChatSidebar
+        currentSessionId={currentSessionId}
+        onSessionSelect={handleSessionSelect}
+        onNewChat={handleNewChat}
+        refreshTrigger={sidebarRefresh}
+      />
 
-        <div className="flex items-center gap-4">
-          {currentAgentResponse && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Button
-                onClick={() => setShowReasoningPanel(true)}
-                variant="outline"
-                className="flex items-center gap-2.5 px-5 py-2.5 h-auto rounded-xl bg-[#262626] hover:bg-[#383838] border-2 border-[#383838] hover:border-emerald-500 transition-all duration-300 group"
-              >
-                <svg className="w-4.5 h-4.5 text-emerald-500 group-hover:text-emerald-400 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                  <line x1="9" y1="3" x2="9" y2="21"></line>
-                </svg>
-                <span className="text-[13px] text-gray-300 font-bold group-hover:text-white transition-colors">View Reasoning</span>
-              </Button>
-            </motion.div>
-          )}
-        </div>
-      </header>
-
-      {/* Main content - Clean centered layout */}
-      <div className="flex-1 flex items-start justify-center overflow-hidden">
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
-          className="w-full h-full"
-        >
-          <ChatPanel
-            messages={messages}
-            onSendMessage={handleSendMessage}
-            isLoading={isLoading}
-          />
-        </motion.div>
-      </div>
-
-      {/* Reasoning Panel Popup - Shadcn UI Dialog */}
-      <Dialog open={showReasoningPanel} onOpenChange={setShowReasoningPanel}>
-        <DialogContent className="max-w-5xl h-[88vh] p-0 gap-0 bg-[#111111] border-[#262626]">
-          {/* Popup Header */}
-          <div className="h-16 border-b border-[#262626] flex items-center justify-between bg-[#111111]" style={{ paddingLeft: '40px', paddingRight: '40px' }}>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-md shadow-emerald-500/20">
-                <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              </div>
-              <h2 className="text-[16px] font-bold text-white">Agent Reasoning</h2>
+      {/* Main area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <header className="h-16 border-b border-[#2a2a2a] bg-[#191919] flex items-center justify-between px-8 flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center">
+              <svg width="20" height="20" className="text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
             </div>
+            <h1 className="text-lg font-bold text-white">ELSA</h1>
           </div>
 
-          {/* Popup Content */}
-          <div className="h-[calc(100%-4rem)] overflow-hidden">
-            <ReasoningPanel
-              agentResponse={currentAgentResponse}
-              isLoading={isLoading}
-            />
+          <div className="flex items-center gap-4">
+            {currentAgentResponse && (
+              <Button
+                onClick={() => setShowReasoning(true)}
+                variant="outline"
+                className="flex items-center gap-2 px-4 py-2 h-auto rounded-lg bg-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500 hover:bg-emerald-500/20 transition-colors"
+              >
+                <Lightbulb className="w-4 h-4 text-emerald-400" />
+                <span className="text-sm text-emerald-400 font-semibold">Reasoning</span>
+                <span className="text-xs text-emerald-500/60 font-medium">{currentAgentResponse.reasoning_steps.length} steps</span>
+              </Button>
+            )}
+            <UserMenu />
+          </div>
+        </header>
+
+        {/* Chat */}
+        <div className="flex-1 overflow-hidden">
+          <ChatPanel messages={messages} onSendMessage={handleSendMessage} isLoading={isLoading} />
+        </div>
+      </div>
+
+      {/* Floating reasoning button */}
+      {currentAgentResponse && !showReasoning && (
+        <div className="fixed bottom-28 right-10 z-20">
+          <Button
+            onClick={() => setShowReasoning(true)}
+            className="flex items-center gap-2 px-4 py-2.5 h-auto rounded-xl bg-emerald-500 hover:bg-emerald-600 shadow-lg shadow-emerald-500/25 transition-colors"
+          >
+            <Lightbulb className="w-4 h-4 text-white" />
+            <span className="text-sm text-white font-semibold">Reasoning</span>
+            <span className="bg-white/20 text-white text-xs font-bold px-2 py-0.5 rounded">{currentAgentResponse.reasoning_steps.length}</span>
+          </Button>
+        </div>
+      )}
+
+      {/* Reasoning dialog */}
+      <Dialog open={showReasoning} onOpenChange={setShowReasoning}>
+        <DialogContent className="max-w-5xl h-[85vh] p-0 gap-0 bg-[#111] border-[#262626]">
+          <div className="h-14 border-b border-[#262626] flex items-center gap-3 px-6">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center">
+              <Lightbulb className="w-3.5 h-3.5 text-white" />
+            </div>
+            <h2 className="text-sm font-bold text-white">Agent Reasoning</h2>
+          </div>
+          <div className="h-[calc(100%-3.5rem)] overflow-hidden">
+            <ReasoningPanel agentResponse={currentAgentResponse} isLoading={isLoading} />
           </div>
         </DialogContent>
       </Dialog>

@@ -5,6 +5,7 @@
 
 import { esClient, WALLET_TX_INDEX, WALLET_SUMMARY_INDEX } from '../src/config/elasticsearch';
 import { WALLET_TX_INDEX_MAPPING, WALLET_SUMMARY_INDEX_MAPPING } from '../src/types/wallet';
+import { USER_INDEX, USER_INDEX_MAPPING, CHAT_HISTORY_INDEX, CHAT_HISTORY_INDEX_MAPPING } from '../src/types/auth';
 
 async function initIndices() {
   try {
@@ -37,6 +38,34 @@ async function initIndices() {
       body: WALLET_SUMMARY_INDEX_MAPPING,
     });
     console.log(`Index "${WALLET_SUMMARY_INDEX}" created successfully!`);
+
+    // Initialize elsa-users index
+    const usersExists = await esClient.indices.exists({ index: USER_INDEX });
+    if (usersExists) {
+      console.log(`Index "${USER_INDEX}" already exists. Deleting...`);
+      await esClient.indices.delete({ index: USER_INDEX });
+    }
+
+    console.log(`Creating index "${USER_INDEX}" with mapping...`);
+    await esClient.indices.create({
+      index: USER_INDEX,
+      body: USER_INDEX_MAPPING,
+    });
+    console.log(`Index "${USER_INDEX}" created successfully!`);
+
+    // Initialize elsa-chat-history index
+    const chatsExists = await esClient.indices.exists({ index: CHAT_HISTORY_INDEX });
+    if (chatsExists) {
+      console.log(`Index "${CHAT_HISTORY_INDEX}" already exists. Deleting...`);
+      await esClient.indices.delete({ index: CHAT_HISTORY_INDEX });
+    }
+
+    console.log(`Creating index "${CHAT_HISTORY_INDEX}" with mapping...`);
+    await esClient.indices.create({
+      index: CHAT_HISTORY_INDEX,
+      body: CHAT_HISTORY_INDEX_MAPPING,
+    });
+    console.log(`Index "${CHAT_HISTORY_INDEX}" created successfully!`);
 
     // Verify health
     const health = await esClient.cluster.health({ index: `${WALLET_TX_INDEX},${WALLET_SUMMARY_INDEX}` });
