@@ -5,7 +5,7 @@
 
 import { esClient, WALLET_TX_INDEX, WALLET_SUMMARY_INDEX } from '../config/elasticsearch';
 import { fetchWalletFromBlockchain, satoshiToBTC, detectChain } from '../services/blockchain';
-import { fetchEthBalance, fetchEthTransactions, weiToETH } from '../services/etherscan';
+import { fetchEthBalance, fetchEthTransactions, fetchEthTokenTransactions, weiToETH, tokenToDecimal } from '../services/etherscan';
 import type { WalletTransaction, WalletSummary } from '../types/wallet';
 import { z } from 'zod';
 
@@ -267,14 +267,17 @@ async function fetchBitcoinWallet(address: string, limit: number, now: string, s
 }
 
 async function fetchEthereumWallet(address: string, limit: number, now: string, startTime: number) {
-  const [balanceWei, ethTxs] = await Promise.all([
+  const tokenLimit = Math.min(limit * 3, 300); // fetch more token txs to ensure overlap with normal txs
+  const [balanceWei, ethTxs, tokenTxs] = await Promise.all([
     fetchEthBalance(address),
     fetchEthTransactions(address, 1, limit, 'desc'),
+    fetchEthTokenTransactions(address, 1, tokenLimit, 'desc'),
   ]);
 
   const addressLower = address.toLowerCase();
 
-  const transactions: WalletTransaction[] = ethTxs.map(tx => {
+  // Normal ETH transactions
+  const normalTransactions: WalletTransaction[] = ethTxs.map(tx => {
     const isIncoming = tx.to.toLowerCase() === addressLower;
     const valueEth = weiToETH(tx.value);
     const gasUsed = parseInt(tx.gasUsed, 10);
@@ -298,10 +301,59 @@ async function fetchEthereumWallet(address: string, limit: number, now: string, 
       from_address: tx.from,
       to_address: tx.to,
       is_error: tx.isError === '1',
+      is_token_transfer: false,
       block_height: parseInt(tx.blockNumber, 10),
       fetched_at: now,
     };
   });
+
+  // ERC-20 token transactions (only those not already in normal txs)
+  const normalTxHashes = new Set(normalTransactions.map(tx => tx.tx_hash));
+  const tokenTransactions: WalletTransaction[] = tokenTxs
+    .filter(tx => !normalTxHashes.has(tx.hash)) // avoid duplicates
+    .map(tx => {
+      const isIncoming = tx.to.toLowerCase() === addressLower;
+      const tokenVal = tokenToDecimal(tx.value, tx.tokenDecimal);
+      const timestamp = parseInt(tx.timeStamp, 10);
+
+      return {
+        tx_hash: tx.hash,
+        address,
+        chain: 'ethereum' as const,
+        time: timestamp,
+        time_iso: new Date(timestamp * 1000).toISOString(),
+        direction: isIncoming ? 'incoming' as const : 'outgoing' as const,
+        value_eth: 0, // no native ETH transferred
+        from_address: tx.from,
+        to_address: tx.to,
+        is_token_transfer: true,
+        token_name: tx.tokenName,
+        token_symbol: tx.tokenSymbol,
+        token_decimals: parseInt(tx.tokenDecimal, 10),
+        token_contract: tx.contractAddress,
+        token_value: tokenVal,
+        token_value_raw: tx.value,
+        block_height: parseInt(tx.blockNumber, 10),
+        fetched_at: now,
+      };
+    });
+
+  // Also update normal txs that had 0 ETH but have a matching token transfer
+  const tokenByHash = new Map(tokenTxs.map(tx => [tx.hash, tx]));
+  for (const tx of normalTransactions) {
+    const tokenTx = tokenByHash.get(tx.tx_hash);
+    if (tokenTx && (tx.value_eth === 0 || tx.value_eth === undefined)) {
+      tx.is_token_transfer = true;
+      tx.token_name = tokenTx.tokenName;
+      tx.token_symbol = tokenTx.tokenSymbol;
+      tx.token_decimals = parseInt(tokenTx.tokenDecimal, 10);
+      tx.token_contract = tokenTx.contractAddress;
+      tx.token_value = tokenToDecimal(tokenTx.value, tokenTx.tokenDecimal);
+      tx.token_value_raw = tokenTx.value;
+    }
+  }
+
+  const transactions = [...normalTransactions, ...tokenTransactions];
 
   const incoming = transactions.filter(tx => tx.direction === 'incoming');
   const outgoing = transactions.filter(tx => tx.direction === 'outgoing');

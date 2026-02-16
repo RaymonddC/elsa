@@ -10,7 +10,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { analyzeQuestion } from './agent/orchestrator';
-import { testConnection } from './config/elasticsearch';
+import { testConnection, esClient, WALLET_TX_INDEX } from './config/elasticsearch';
 import { z } from 'zod';
 import authRoutes from './routes/auth';
 import chatRoutes from './routes/chats';
@@ -52,6 +52,75 @@ app.get('/health', async (_req, res) => {
       status: 'error',
       error: error instanceof Error ? error.message : 'Unknown error',
     });
+  }
+});
+
+// Wallet activity endpoint - daily transaction counts for charts
+app.get('/wallet-activity/:address', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { address } = req.params;
+
+    const isEth = address.startsWith('0x');
+    const valueField = isEth ? 'value_eth' : 'value_btc';
+
+    const response = await esClient.search({
+      index: WALLET_TX_INDEX,
+      body: {
+        query: { term: { address } },
+        size: 0,
+        aggs: {
+          daily: {
+            date_histogram: {
+              field: 'time_iso',
+              calendar_interval: 'day',
+            },
+            aggs: {
+              incoming: { filter: { term: { direction: 'incoming' } } },
+              outgoing: { filter: { term: { direction: 'outgoing' } } },
+              value_in: {
+                filter: { term: { direction: 'incoming' } },
+                aggs: { sum: { sum: { field: valueField } } },
+              },
+              value_out: {
+                filter: { term: { direction: 'outgoing' } },
+                aggs: { sum: { sum: { field: valueField } } },
+              },
+              ...(isEth ? {
+                token_value_in: {
+                  filter: { bool: { must: [{ term: { direction: 'incoming' } }, { term: { is_token_transfer: true } }] } },
+                  aggs: { sum: { sum: { field: 'token_value' } } },
+                },
+                token_value_out: {
+                  filter: { bool: { must: [{ term: { direction: 'outgoing' } }, { term: { is_token_transfer: true } }] } },
+                  aggs: { sum: { sum: { field: 'token_value' } } },
+                },
+                top_token: {
+                  terms: { field: 'token_symbol', size: 1 },
+                },
+              } : {}),
+            },
+          },
+        },
+      },
+    });
+
+    const buckets = (response.aggregations?.daily as any)?.buckets || [];
+    const activity = buckets.map((b: any) => ({
+      date: b.key_as_string,
+      total: b.doc_count,
+      incoming: b.incoming.doc_count,
+      outgoing: b.outgoing.doc_count,
+      value_in: b.value_in?.sum?.value || 0,
+      value_out: b.value_out?.sum?.value || 0,
+      token_value_in: b.token_value_in?.sum?.value || 0,
+      token_value_out: b.token_value_out?.sum?.value || 0,
+      top_token: b.top_token?.buckets?.[0]?.key || null,
+    }));
+
+    res.json({ address, chain: isEth ? 'ethereum' : 'bitcoin', activity });
+  } catch (error) {
+    console.error('Error in /wallet-activity:', error);
+    res.status(500).json({ error: 'Failed to fetch wallet activity' });
   }
 });
 

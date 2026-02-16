@@ -28,6 +28,14 @@ export const WalletTransactionSchema = z.object({
   from_address: z.string().optional(),
   to_address: z.string().optional(),
   is_error: z.boolean().optional(),
+  // Token transfer fields
+  token_name: z.string().optional(),
+  token_symbol: z.string().optional(),
+  token_decimals: z.number().optional(),
+  token_contract: z.string().optional(),
+  token_value: z.number().optional(),
+  token_value_raw: z.string().optional(),
+  is_token_transfer: z.boolean().optional(),
   // Common fields
   input_addresses: z.array(z.string()).optional(),
   output_addresses: z.array(z.string()).optional(),
@@ -88,6 +96,14 @@ export const WALLET_TX_INDEX_MAPPING = {
       from_address: { type: 'keyword' as const },
       to_address: { type: 'keyword' as const },
       is_error: { type: 'boolean' as const },
+      // Token transfers
+      token_name: { type: 'keyword' as const },
+      token_symbol: { type: 'keyword' as const },
+      token_decimals: { type: 'integer' as const },
+      token_contract: { type: 'keyword' as const },
+      token_value: { type: 'double' as const },
+      token_value_raw: { type: 'keyword' as const },
+      is_token_transfer: { type: 'boolean' as const },
       // Common
       input_addresses: { type: 'keyword' as const },
       output_addresses: { type: 'keyword' as const },

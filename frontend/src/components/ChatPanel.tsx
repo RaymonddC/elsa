@@ -3,6 +3,7 @@ import { ArrowUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChatMessage } from '../types/agent';
+import TransactionChart from './TransactionChart';
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -15,6 +16,26 @@ const suggestions = [
   { label: "Analyze Vitalik's ETH wallet", query: "Analyze Ethereum wallet 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
   { label: "Detect wallet anomalies", query: "Detect anomalies in wallet 1BzkoGfrLtL59ZGjhKfvBwy47DEb6oba5f" },
 ];
+
+/** Extract wallet address from message (agentResponse or content fallback) */
+function extractWalletAddress(msg: ChatMessage): string | null {
+  // Try agentResponse (camelCase from fresh query, or snake_case from saved session)
+  const agent = msg.agentResponse || (msg as any).agent_response;
+  if (agent?.reasoning_steps) {
+    for (const step of agent.reasoning_steps) {
+      if (step.tool_call?.tool_name === 'fetch_wallet_data') {
+        const addr = step.tool_call.arguments?.address;
+        if (typeof addr === 'string') return addr;
+      }
+    }
+  }
+  // Fallback: regex from the markdown content
+  const btcMatch = msg.content.match(/\b(1[a-km-zA-HJ-NP-Z1-9]{25,34}|3[a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-zA-HJ-NP-Z0-9]{25,62})\b/);
+  if (btcMatch) return btcMatch[1];
+  const ethMatch = msg.content.match(/\b(0x[a-fA-F0-9]{40})\b/);
+  if (ethMatch) return ethMatch[1];
+  return null;
+}
 
 export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPanelProps) {
   const [input, setInput] = useState('');
@@ -121,10 +142,16 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
                     {msg.content}
                   </div>
                 ) : (
-                  <div className="pl-1 pb-2 prose-elsa">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {msg.content}
-                    </ReactMarkdown>
+                  <div className="pl-1 pb-2">
+                    <div className="prose-elsa">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.content}
+                      </ReactMarkdown>
+                    </div>
+                    {(() => {
+                      const addr = extractWalletAddress(msg);
+                      return addr ? <TransactionChart address={addr} /> : null;
+                    })()}
                   </div>
                 )}
               </div>

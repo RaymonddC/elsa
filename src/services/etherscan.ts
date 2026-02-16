@@ -67,6 +67,30 @@ const EtherscanTxListResponseSchema = EtherscanBaseResponseSchema.extend({
 
 export type EtherscanTx = z.infer<typeof EtherscanTxSchema>;
 
+const EtherscanTokenTxSchema = z.object({
+  blockNumber: z.string(),
+  timeStamp: z.string(),
+  hash: z.string(),
+  from: z.string(),
+  to: z.string(),
+  value: z.string(), // token amount in smallest unit
+  tokenName: z.string(),
+  tokenSymbol: z.string(),
+  tokenDecimal: z.string(),
+  contractAddress: z.string(),
+  gas: z.string().optional(),
+  gasPrice: z.string().optional(),
+  gasUsed: z.string().optional(),
+  nonce: z.string().optional(),
+  confirmations: z.string().optional(),
+});
+
+const EtherscanTokenTxListResponseSchema = EtherscanBaseResponseSchema.extend({
+  result: z.union([z.array(EtherscanTokenTxSchema), z.string()]),
+});
+
+export type EtherscanTokenTx = z.infer<typeof EtherscanTokenTxSchema>;
+
 /**
  * Fetch ETH balance for an address
  */
@@ -124,6 +148,53 @@ export async function fetchEthTransactions(
   }
 
   return parsed.result;
+}
+
+/**
+ * Fetch ERC-20 token transfers for an address
+ */
+export async function fetchEthTokenTransactions(
+  address: string,
+  page: number = 1,
+  offset: number = 100,
+  sort: 'asc' | 'desc' = 'desc',
+): Promise<EtherscanTokenTx[]> {
+  const apiKey = getApiKey();
+  const url = `${ETHERSCAN_API_BASE}?chainid=1&module=account&action=tokentx&address=${address}&startblock=0&endblock=99999999&page=${page}&offset=${offset}&sort=${sort}&apikey=${apiKey}`;
+
+  const response = await rateLimitedFetch(url);
+  if (!response.ok) {
+    throw new Error(`Etherscan API error: ${response.status} ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const parsed = EtherscanTokenTxListResponseSchema.parse(data);
+
+  if (parsed.status !== '1') {
+    if (parsed.message === 'No transactions found') {
+      return [];
+    }
+    if (typeof parsed.result === 'string') {
+      throw new Error(`Etherscan API error: ${parsed.result}`);
+    }
+  }
+
+  if (typeof parsed.result === 'string') {
+    return [];
+  }
+
+  return parsed.result;
+}
+
+/**
+ * Convert token value from smallest unit to human-readable using token decimals
+ */
+export function tokenToDecimal(value: string, decimals: string | number): number {
+  const dec = typeof decimals === 'string' ? parseInt(decimals, 10) : decimals;
+  if (dec === 0) return Number(value);
+  const valueBigInt = BigInt(value);
+  const result = Number(valueBigInt) / Math.pow(10, dec);
+  return result;
 }
 
 /**
