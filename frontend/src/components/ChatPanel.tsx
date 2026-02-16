@@ -1,10 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp } from 'lucide-react';
+import { ArrowUp, Sparkles, Search, BarChart3, Zap, Bitcoin } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChatMessage } from '../types/agent';
 import TransactionChart from './TransactionChart';
 import WalletDashboardCard from './WalletDashboardCard';
+import { useToast } from '../hooks/useToast';
+import { validateWallet, detectChain, type ChainType } from '../utils/walletValidation';
+import LoadingSkeleton from './ui/LoadingSkeleton';
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -70,8 +73,10 @@ function extractWalletStats(msg: ChatMessage) {
 
 export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPanelProps) {
   const [input, setInput] = useState('');
+  const [detectedChain, setDetectedChain] = useState<ChainType | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { showToast } = useToast();
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -85,14 +90,29 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
         textareaRef.current.style.height = Math.min(scrollH, 200) + 'px';
       }
     }
+
+    // Detect chain as user types
+    setDetectedChain(detectChain(input));
   }, [input]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (input.trim() && !isLoading) {
-      onSendMessage(input.trim());
-      setInput('');
+    if (!input.trim() || isLoading) return;
+
+    // Validate wallet if it looks like an address
+    const validation = validateWallet(input);
+    if (!validation.valid && (input.includes('0x') || /^[13bc1]/.test(input))) {
+      showToast({
+        type: 'warning',
+        message: validation.error || 'Invalid wallet address format',
+        duration: 5000,
+      });
+      return;
     }
+
+    onSendMessage(input.trim());
+    setInput('');
+    setDetectedChain(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -129,25 +149,102 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
       <div className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center px-6 pb-20">
-            <p className="text-white/30 text-[13px] font-medium tracking-widest uppercase mb-6">ELSA</p>
-            <h2 className="text-[32px] font-normal text-white/90 mb-12 tracking-tight">What would you like to analyze?</h2>
+            {/* Logo with gradient animation */}
+            <div className="mb-6 relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-primary via-accent to-primary bg-[length:200%_100%] animate-pulse blur-2xl opacity-20"></div>
+              <div className="relative">
+                <Sparkles className="w-16 h-16 text-primary" strokeWidth={1.5} />
+              </div>
+            </div>
 
-            <div className="w-full max-w-[560px] mb-8">
+            {/* Heading */}
+            <p className="text-white/30 text-[13px] font-semibold tracking-widest uppercase mb-3">ELSA</p>
+            <h1 className="text-[36px] md:text-[42px] font-display font-semibold text-white/90 mb-3 tracking-tight text-center">
+              Analyze Crypto Wallets
+              <br />
+              <span className="text-primary">with AI Intelligence</span>
+            </h1>
+            <p className="text-[15px] text-white/40 mb-10 text-center max-w-md">
+              Get instant insights into any Bitcoin or Ethereum wallet in seconds
+            </p>
+
+            {/* Smart Input */}
+            <div className="w-full max-w-[580px] mb-10">
               <form onSubmit={handleSubmit}>
-                {inputBox("Paste a wallet address...")}
+                <div className={`
+                  flex items-end rounded-[20px] bg-[#141414] transition-all duration-300
+                  focus-within:bg-[#181818] focus-within:ring-2
+                  ${detectedChain === 'bitcoin' ? 'focus-within:ring-primary/30' : ''}
+                  ${detectedChain === 'ethereum' ? 'focus-within:ring-info/30' : ''}
+                  ${!detectedChain ? 'focus-within:ring-white/[0.06]' : ''}
+                `}>
+                  {detectedChain && (
+                    <div className="pl-4 py-3.5 flex items-center">
+                      {detectedChain === 'bitcoin' ? (
+                        <Bitcoin className="w-5 h-5 text-primary" strokeWidth={2} />
+                      ) : (
+                        <span className="text-info font-mono text-sm font-semibold">ETH</span>
+                      )}
+                    </div>
+                  )}
+                  <textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Paste a wallet address..."
+                    disabled={isLoading}
+                    rows={1}
+                    className={`
+                      flex-1 resize-none bg-transparent text-[15px] text-white/90 placeholder-white/20
+                      ${detectedChain ? 'pl-2' : 'pl-5'} pr-2 py-3.5
+                      focus:outline-none disabled:opacity-40 min-h-[52px] max-h-[200px]
+                    `}
+                  />
+                  <button
+                    type="submit"
+                    disabled={isLoading || !input.trim()}
+                    className="m-1.5 p-3 rounded-[16px] bg-gradient-to-r from-primary to-primary-light hover:shadow-glow-green disabled:opacity-10 disabled:from-white/10 disabled:to-white/10 transition-all duration-200 flex-shrink-0"
+                  >
+                    <ArrowUp className="w-5 h-5 text-[#090909]" strokeWidth={2.5} />
+                  </button>
+                </div>
               </form>
             </div>
 
-            <div className="flex gap-2 flex-wrap justify-center">
-              {suggestions.map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => onSendMessage(item.query)}
-                  className="px-4 py-2 rounded-full bg-white/[0.04] hover:bg-white/[0.08] text-[13px] text-white/40 hover:text-white/70 transition-all duration-200"
-                >
-                  {item.label}
-                </button>
-              ))}
+            {/* Feature Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10 w-full max-w-[640px]">
+              <div className="flex flex-col items-center text-center p-6 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-all duration-200">
+                <Search className="w-8 h-8 text-primary/80 mb-3" strokeWidth={1.5} />
+                <h3 className="text-sm font-semibold text-white/80 mb-1">Deep Analysis</h3>
+                <p className="text-xs text-white/40">Transaction history & patterns</p>
+              </div>
+              <div className="flex flex-col items-center text-center p-6 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-all duration-200">
+                <BarChart3 className="w-8 h-8 text-accent/80 mb-3" strokeWidth={1.5} />
+                <h3 className="text-sm font-semibold text-white/80 mb-1">Visual Charts</h3>
+                <p className="text-xs text-white/40">Interactive data visualization</p>
+              </div>
+              <div className="flex flex-col items-center text-center p-6 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-all duration-200">
+                <Zap className="w-8 h-8 text-warning/80 mb-3" strokeWidth={1.5} />
+                <h3 className="text-sm font-semibold text-white/80 mb-1">Real-time Insights</h3>
+                <p className="text-xs text-white/40">AI-powered recommendations</p>
+              </div>
+            </div>
+
+            {/* Example Wallets */}
+            <div className="text-center">
+              <p className="text-xs text-white/30 mb-3 uppercase tracking-wider font-medium">Try these examples</p>
+              <div className="flex gap-2 flex-wrap justify-center">
+                {suggestions.map((item, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => onSendMessage(item.query)}
+                    className="px-4 py-2 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.1] text-[13px] text-white/50 hover:text-white/80 transition-all duration-200"
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         ) : (
@@ -222,17 +319,15 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
             {isLoading && (
               <div>
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3 bg-emerald-500/[0.08]">
-                  <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-emerald-400" />
+                  <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-emerald-400 animate-pulse" />
                   <span className="text-[13px] font-bold tracking-wide text-emerald-400">ELSA</span>
                 </div>
-                <div className="flex items-center gap-1.5 pl-1">
-                  {[0, 1, 2].map((i) => (
-                    <div
-                      key={i}
-                      className="w-1 h-1 rounded-full bg-white/25 animate-pulse"
-                      style={{ animationDelay: `${i * 200}ms` }}
-                    />
-                  ))}
+                <div className="pl-1 pb-2">
+                  <LoadingSkeleton
+                    lines={3}
+                    widths={['85%', '65%', '75%']}
+                    className="mb-4"
+                  />
                 </div>
               </div>
             )}

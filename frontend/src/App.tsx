@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import { PanelLeft } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
+import { useToast } from './hooks/useToast';
 import LoginPage from './components/LoginPage';
 import ChatPanel from './components/ChatPanel';
 import ChatSidebar from './components/ChatSidebar';
+import ToastContainer from './components/ui/Toast';
 import type { ChatMessage, AgentResponse } from './types/agent';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 function App() {
   const { user, token, isLoading: authLoading } = useAuth();
+  const { showToast } = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -114,7 +117,19 @@ function App() {
       const finalMessages = [...updatedMessages, assistantMessage];
       setMessages(finalMessages);
       await saveSession(finalMessages, sessionId);
+
+      showToast({
+        type: 'success',
+        message: 'Wallet analyzed successfully!',
+        duration: 2000,
+      });
     } catch (error) {
+      showToast({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Failed to analyze wallet. Please try again.',
+        duration: undefined, // Requires manual dismiss
+      });
+
       const errorMessage: ChatMessage = {
         role: 'assistant',
         content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}. Make sure the backend is running.`,
@@ -130,6 +145,8 @@ function App() {
 
   return (
     <div className="h-screen w-screen bg-[#090909] flex overflow-hidden">
+      <ToastContainer />
+
       <ChatSidebar
         currentSessionId={currentSessionId}
         onSessionSelect={handleSessionSelect}
