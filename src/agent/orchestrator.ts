@@ -73,6 +73,7 @@ OUTPUT FORMAT — Structure your final answer in EXACTLY this order with these m
 
 ## Wallet Summary
 - Address, chain, balance (with USD), total received/sent (with USD), transaction count, date range of activity.
+- Total Value Transacted: total ETH volume in/out with USD, total token volume per token with USD, and grand total USD across all assets.
 
 [CHART]
 
@@ -80,14 +81,14 @@ OUTPUT FORMAT — Structure your final answer in EXACTLY this order with these m
 - List each ERC-20 token traded: symbol, name, volume in/out with USD values, tx count.
 - If no tokens were traded, state "This wallet only transacted in native ETH."
 
-## Total Value Transacted
-- Total ETH volume in/out with USD values.
-- Total token volume per token with USD values.
-- Grand total USD value across all assets.
-
 ## Anomalies Detected
 - List each anomaly found with severity, description, and example transactions.
 - If no anomalies found, state "No anomalies detected."
+
+## Analysis Summary
+- A brief 2-4 sentence conclusion that ties together all findings.
+- Highlight the most important takeaways: overall wallet behavior, risk level, and any notable patterns.
+- Example: "This wallet appears to be an active DeFi trader with heavy USDC and WETH activity. No high-severity anomalies were detected. The majority of transactions are token swaps with consistent gas usage."
 
 IMPORTANT: You MUST include the literal text "[CHART]" on its own line right after the Wallet Summary section. This is a placeholder that will be replaced with an interactive chart.`;
 }
