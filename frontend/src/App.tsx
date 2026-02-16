@@ -144,13 +144,13 @@ function App() {
   };
 
   return (
-    <div className="h-screen w-screen bg-[#090909] flex overflow-hidden">
+    <div className="h-screen w-screen bg-gradient-to-br from-[#050505] via-[#0a0a0a] to-[#0f0f0f] flex overflow-hidden">
       <ToastContainer />
 
       {/* Sidebar - hidden on mobile by default */}
       <div className={`
         ${sidebarOpen ? 'block' : 'hidden'} md:block
-        fixed md:relative inset-0 md:inset-auto z-40 md:z-auto
+        fixed md:relative inset-0 md:inset-auto z-40 md:z-auto h-full
       `}>
         {/* Mobile backdrop */}
         {sidebarOpen && (
@@ -160,7 +160,7 @@ function App() {
           />
         )}
 
-        <div className="relative">
+        <div className="relative h-full">
           <ChatSidebar
             currentSessionId={currentSessionId}
             onSessionSelect={handleSessionSelect}

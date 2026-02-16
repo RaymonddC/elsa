@@ -172,10 +172,10 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
             <div className="w-full max-w-[580px] mb-10">
               <form onSubmit={handleSubmit}>
                 <div className={`
-                  flex items-end rounded-[20px] bg-[#141414] transition-all duration-300
-                  focus-within:bg-[#181818] focus-within:ring-2
-                  ${detectedChain === 'bitcoin' ? 'focus-within:ring-primary/30' : ''}
-                  ${detectedChain === 'ethereum' ? 'focus-within:ring-info/30' : ''}
+                  flex items-end rounded-[20px] bg-white/[0.04] border border-white/[0.08] transition-all duration-300
+                  focus-within:bg-white/[0.06] focus-within:border-white/[0.12] focus-within:ring-2
+                  ${detectedChain === 'bitcoin' ? 'focus-within:ring-primary/30 focus-within:border-primary/30' : ''}
+                  ${detectedChain === 'ethereum' ? 'focus-within:ring-info/30 focus-within:border-info/30' : ''}
                   ${!detectedChain ? 'focus-within:ring-white/[0.06]' : ''}
                 `}>
                   {detectedChain && (
@@ -196,7 +196,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
                     disabled={isLoading}
                     rows={1}
                     className={`
-                      flex-1 resize-none bg-transparent text-[15px] text-white/90 placeholder-white/20
+                      flex-1 resize-none bg-transparent text-[15px] text-white/95 placeholder-white/40
                       ${detectedChain ? 'pl-2' : 'pl-5'} pr-2 py-3.5
                       focus:outline-none disabled:opacity-40 min-h-[52px] max-h-[200px]
                     `}

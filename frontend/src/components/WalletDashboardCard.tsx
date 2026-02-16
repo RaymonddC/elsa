@@ -103,7 +103,7 @@ export default function WalletDashboardCard({ address, stats, isLoading }: Walle
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-white/[0.06]">
+        <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/[0.06]">
           {/* Transactions */}
           <div className="group/stat">
             <div className="flex items-center gap-2 mb-2">

@@ -43,6 +43,15 @@ export default {
         'glow-green': '0 0 12px rgba(34, 197, 94, 0.4)',
         'elevated': '0 4px 24px rgba(0, 0, 0, 0.4)',
       },
+      keyframes: {
+        shimmer: {
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(100%)' },
+        },
+      },
+      animation: {
+        shimmer: 'shimmer 2s ease-in-out infinite',
+      },
     },
   },
   plugins: [],
