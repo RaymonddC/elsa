@@ -58,10 +58,12 @@ export async function findOrCreateUser(profile: {
       id: hit._id!,
       body: { doc: { last_login: now, name: profile.name, picture: profile.picture } },
     });
-    return { userId: hit._id!, user: { ...(hit._source as User), last_login: now } };
+    // Use google_id as stable userId
+    const user = hit._source as User;
+    return { userId: user.google_id, user: { ...user, last_login: now } };
   }
 
-  // Create new user
+  // Create new user - use google_id as doc ID for stable user identity
   const newUser: User = {
     google_id: profile.google_id,
     email: profile.email,
@@ -71,13 +73,14 @@ export async function findOrCreateUser(profile: {
     last_login: now,
   };
 
-  const createResult = await esClient.index({
+  await esClient.index({
     index: USER_INDEX,
+    id: profile.google_id,
     body: newUser,
     refresh: 'wait_for',
   });
 
-  return { userId: createResult._id, user: newUser };
+  return { userId: profile.google_id, user: newUser };
 }
 
 export function generateToken(userId: string, email: string): string {
