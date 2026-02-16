@@ -49,7 +49,7 @@ export const TOOL_DEFINITIONS = [
     type: 'function' as const,
     function: {
       name: 'fetch_wallet_data',
-      description: 'Fetch wallet data from blockchain API and cache it in Elasticsearch. Supports both Bitcoin and Ethereum. Auto-detects chain from address format. Use this FIRST when analyzing a new wallet address.',
+      description: 'Fetch wallet data from blockchain API and cache it in Elasticsearch. Supports both Bitcoin and Ethereum. Auto-detects chain from address format. Use this FIRST when analyzing a new wallet address. For Ethereum wallets, also fetches ERC-20 token transfers and returns a token_summary with per-token breakdown (symbol, name, total_in, total_out, tx_count).',
       parameters: {
         type: 'object',
         properties: {
@@ -136,7 +136,7 @@ export const TOOL_DEFINITIONS = [
     type: 'function' as const,
     function: {
       name: 'get_wallet_summary',
-      description: 'Get cached summary for a wallet address including balance, totals, and transaction count. Works for both Bitcoin and Ethereum.',
+      description: 'Get cached summary for a wallet address including balance, totals, transaction count, and token_summary (per-token breakdown for Ethereum). Works for both Bitcoin and Ethereum.',
       parameters: {
         type: 'object',
         properties: {
@@ -360,6 +360,25 @@ async function fetchEthereumWallet(address: string, limit: number, now: string, 
   const totalReceivedEth = incoming.reduce((sum, tx) => sum + (tx.value_eth || 0), 0);
   const totalSentEth = outgoing.reduce((sum, tx) => sum + (tx.value_eth || 0), 0);
 
+  // Build per-token breakdown
+  const tokenMap = new Map<string, { symbol: string; name: string; contract: string; total_in: number; total_out: number; tx_count: number }>();
+  for (const tx of transactions) {
+    if (tx.is_token_transfer && tx.token_symbol) {
+      const key = tx.token_contract || tx.token_symbol;
+      if (!tokenMap.has(key)) {
+        tokenMap.set(key, { symbol: tx.token_symbol, name: tx.token_name || tx.token_symbol, contract: tx.token_contract || '', total_in: 0, total_out: 0, tx_count: 0 });
+      }
+      const entry = tokenMap.get(key)!;
+      entry.tx_count++;
+      if (tx.direction === 'incoming') {
+        entry.total_in += tx.token_value || 0;
+      } else {
+        entry.total_out += tx.token_value || 0;
+      }
+    }
+  }
+  const tokenSummary = Array.from(tokenMap.values()).sort((a, b) => b.tx_count - a.tx_count);
+
   const firstTx = transactions.length > 0
     ? transactions.reduce((a, b) => a.time < b.time ? a : b)
     : null;
@@ -375,6 +394,7 @@ async function fetchEthereumWallet(address: string, limit: number, now: string, 
     final_balance_eth: weiToETH(balanceWei),
     total_received_eth: Number(totalReceivedEth.toFixed(18)),
     total_sent_eth: Number(totalSentEth.toFixed(18)),
+    token_summary: tokenSummary.length > 0 ? tokenSummary : undefined,
     first_seen: firstTx ? firstTx.time_iso : undefined,
     last_seen: lastTx ? lastTx.time_iso : undefined,
     fetched_at: now,
@@ -394,6 +414,7 @@ async function fetchEthereumWallet(address: string, limit: number, now: string, 
       time: tx.time_iso,
       from: tx.from_address,
       to: tx.to_address,
+      ...(tx.is_token_transfer ? { token_symbol: tx.token_symbol, token_value: tx.token_value } : {}),
     })),
     execution_time_ms: Date.now() - startTime,
   };

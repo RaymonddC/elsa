@@ -63,6 +63,15 @@ export const WalletSummarySchema = z.object({
   final_balance_eth: z.number().optional(),
   total_received_eth: z.number().optional(),
   total_sent_eth: z.number().optional(),
+  // Token breakdown
+  token_summary: z.array(z.object({
+    symbol: z.string(),
+    name: z.string(),
+    contract: z.string(),
+    total_in: z.number(),
+    total_out: z.number(),
+    tx_count: z.number(),
+  })).optional(),
   // Common
   first_seen: z.string().optional(),
   last_seen: z.string().optional(),
@@ -138,6 +147,18 @@ export const WALLET_SUMMARY_INDEX_MAPPING = {
       final_balance_eth: { type: 'double' as const },
       total_received_eth: { type: 'double' as const },
       total_sent_eth: { type: 'double' as const },
+      // Token breakdown
+      token_summary: {
+        type: 'nested' as const,
+        properties: {
+          symbol: { type: 'keyword' as const },
+          name: { type: 'keyword' as const },
+          contract: { type: 'keyword' as const },
+          total_in: { type: 'double' as const },
+          total_out: { type: 'double' as const },
+          tx_count: { type: 'integer' as const },
+        },
+      },
       // Common
       first_seen: { type: 'date' as const },
       last_seen: { type: 'date' as const },

@@ -44,6 +44,16 @@ ANALYSIS GUIDELINES:
 - Explain anomaly types clearly: what the pattern means and why it could be suspicious.
 - If the wallet has many transactions, fetch in batches and summarize trends.
 
+TOKEN ANALYSIS (Ethereum):
+- The wallet summary includes a token_summary array listing each ERC-20 token the wallet has traded.
+- For each token, you get: symbol, name, contract address, total_in, total_out, and tx_count.
+- ALWAYS include a "Token Activity" section in your analysis that lists:
+  - Each token traded (symbol and name)
+  - Volume in/out for each token
+  - Number of transactions per token
+  - Any notable patterns (heavy trading in one token, one-sided flows, etc.)
+- If no tokens were traded, mention that the wallet only transacted in native ETH.
+
 ANOMALY TYPES TO WATCH FOR:
 - Large transactions: statistically unusual amounts (above mean + 2× std deviation)
 - Rapid sequences / mixing: many transactions in short bursts (potential tumbler/bot usage)
@@ -54,7 +64,7 @@ ANOMALY TYPES TO WATCH FOR:
 - Failed transactions (Ethereum): reverted or errored transactions
 - High gas prices (Ethereum): unusually high gas indicating urgency or MEV
 
-Always provide a clear summary with: chain, total balance, transaction count, date range of activity, and any anomalies found.`;
+Always provide a clear summary with: chain, total balance, transaction count, date range of activity, token activity breakdown (for Ethereum), and any anomalies found.`;
 }
 
 const MAX_ITERATIONS = 10; // Prevent infinite loops
