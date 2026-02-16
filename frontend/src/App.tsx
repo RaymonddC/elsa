@@ -16,6 +16,7 @@ function App() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [currentSessionTitle, setCurrentSessionTitle] = useState<string>('');
   const [sidebarRefresh, setSidebarRefresh] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -37,6 +38,7 @@ function App() {
   const handleNewChat = () => {
     setMessages([]);
     setCurrentSessionId(null);
+    setCurrentSessionTitle('');
   };
 
   const handleSessionSelect = async (sessionId: string) => {
@@ -48,6 +50,7 @@ function App() {
       const session = await response.json();
       setMessages(session.messages || []);
       setCurrentSessionId(sessionId);
+      setCurrentSessionTitle(session.title || '');
     } catch (error) {
       console.error('Failed to load session:', error);
     }
@@ -65,6 +68,7 @@ function App() {
         if (!createRes.ok) return null;
         const session = await createRes.json();
         setCurrentSessionId(session.id);
+        setCurrentSessionTitle(title);
 
         await fetch(`${API_URL}/chats/${session.id}`, {
           method: 'PUT',
@@ -194,7 +198,12 @@ function App() {
           </button>
         )}
 
-        <ChatPanel messages={messages} onSendMessage={handleSendMessage} isLoading={isLoading} />
+        <ChatPanel
+          messages={messages}
+          onSendMessage={handleSendMessage}
+          isLoading={isLoading}
+          sessionTitle={currentSessionTitle}
+        />
       </div>
     </div>
   );

@@ -13,6 +13,7 @@ interface ChatPanelProps {
   messages: ChatMessage[];
   onSendMessage: (message: string) => void;
   isLoading: boolean;
+  sessionTitle?: string;
 }
 
 const suggestions = [
@@ -71,7 +72,7 @@ function extractWalletStats(msg: ChatMessage) {
   };
 }
 
-export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPanelProps) {
+export default function ChatPanel({ messages, onSendMessage, isLoading, sessionTitle }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [detectedChain, setDetectedChain] = useState<ChainType | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -146,6 +147,20 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
 
   return (
     <div className="h-full flex flex-col">
+      {/* Chat Header - Only show when there are messages */}
+      {messages.length > 0 && sessionTitle && (
+        <div className="flex-shrink-0 border-b border-white/[0.06] bg-[#0a0a0a]/80 backdrop-blur-xl">
+          <div className="max-w-[700px] mx-auto px-6 py-4">
+            <h1 className="text-[15px] font-semibold text-white/90 truncate tracking-tight">
+              {sessionTitle}
+            </h1>
+            <p className="text-[12px] text-white/30 mt-0.5">
+              {messages.length} {messages.length === 1 ? 'message' : 'messages'}
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center px-6 pb-20">
@@ -248,81 +263,82 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
             </div>
           </div>
         ) : (
-          <div className="max-w-[700px] mx-auto px-6 pt-6 pb-4 space-y-6">
+          <div className="max-w-[700px] mx-auto px-6 pt-6 pb-4">
             {messages.map((msg, idx) => (
-              <div key={idx}>
-                <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3 ${
-                  msg.role === 'user'
-                    ? 'bg-white/[0.06]'
-                    : 'bg-emerald-500/[0.08]'
-                }`}>
-                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                    msg.role === 'user' ? 'bg-white/60' : 'bg-emerald-400'
-                  }`} />
-                  <span className={`text-[13px] font-bold tracking-wide ${
-                    msg.role === 'user' ? 'text-white/80' : 'text-emerald-400'
-                  }`}>
-                    {msg.role === 'user' ? 'You' : 'ELSA'}
-                  </span>
-                </div>
+              <div key={idx} className={idx > 0 ? 'mt-6 pt-6 border-t border-white/[0.04]' : ''}>
                 {msg.role === 'user' ? (
-                  <div className="text-[14px] leading-[1.75] whitespace-pre-wrap pl-1 pb-2 text-white/55">
-                    {msg.content}
+                  // User message - bubble on the right
+                  <div className="flex justify-end">
+                    <div className="max-w-[85%]">
+                      <div className="flex items-center justify-end gap-2 mb-1.5">
+                        <span className="text-[11px] font-semibold text-white/40 tracking-wide">You</span>
+                      </div>
+                      <div className="bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 border border-emerald-500/30 rounded-[18px] rounded-tr-sm px-4 py-3">
+                        <div className="text-[14px] leading-[1.75] whitespace-pre-wrap text-white/90">
+                          {msg.content}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 ) : (
-                  <div className="pl-1 pb-2 space-y-4">
-                    {(() => {
-                      const addr = extractWalletAddress(msg);
-                      const stats = extractWalletStats(msg);
-                      const chartMarker = '[CHART]';
-                      // Escape ~ to prevent GFM strikethrough
-                      const sanitize = (text: string) => text.replace(/~/g, '\\~');
-                      const hasChart = addr && msg.content.includes(chartMarker);
+                  // ELSA message - full width on the left
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[11px] font-semibold text-emerald-400 tracking-wide">ELSA</span>
+                    </div>
+                    <div className="space-y-4">
+                      {(() => {
+                        const addr = extractWalletAddress(msg);
+                        const stats = extractWalletStats(msg);
+                        const chartMarker = '[CHART]';
+                        const sanitize = (text: string) => text.replace(/~/g, '\\~');
+                        const hasChart = addr && msg.content.includes(chartMarker);
 
-                      if (hasChart) {
-                        const [before, after] = msg.content.split(chartMarker);
+                        if (hasChart) {
+                          const [before, after] = msg.content.split(chartMarker);
+                          return (
+                            <>
+                              {addr && <WalletDashboardCard address={addr} stats={stats} />}
+                              <div className="prose-elsa">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                  {sanitize(before.trim())}
+                                </ReactMarkdown>
+                              </div>
+                              <TransactionChart address={addr} />
+                              <div className="prose-elsa">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                  {sanitize(after.trim())}
+                                </ReactMarkdown>
+                              </div>
+                            </>
+                          );
+                        }
+
                         return (
                           <>
                             {addr && <WalletDashboardCard address={addr} stats={stats} />}
                             <div className="prose-elsa">
                               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {sanitize(before.trim())}
+                                {sanitize(msg.content)}
                               </ReactMarkdown>
                             </div>
-                            <TransactionChart address={addr} />
-                            <div className="prose-elsa">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {sanitize(after.trim())}
-                              </ReactMarkdown>
-                            </div>
+                            {addr && <TransactionChart address={addr} />}
                           </>
                         );
-                      }
-
-                      return (
-                        <>
-                          {addr && <WalletDashboardCard address={addr} stats={stats} />}
-                          <div className="prose-elsa">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {sanitize(msg.content)}
-                            </ReactMarkdown>
-                          </div>
-                          {addr && <TransactionChart address={addr} />}
-                        </>
-                      );
-                    })()}
+                      })()}
+                    </div>
                   </div>
                 )}
               </div>
             ))}
 
             {isLoading && (
-              <div>
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3 bg-emerald-500/[0.08]">
-                  <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-emerald-400 animate-pulse" />
-                  <span className="text-[13px] font-bold tracking-wide text-emerald-400">ELSA</span>
+              <div className={messages.length > 0 ? 'mt-6 pt-6 border-t border-white/[0.04]' : ''}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[11px] font-semibold text-emerald-400 tracking-wide">ELSA</span>
+                  <div className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
                 </div>
-                <div className="pl-1 pb-2">
+                <div>
                   <LoadingSkeleton
                     lines={3}
                     widths={['85%', '65%', '75%']}

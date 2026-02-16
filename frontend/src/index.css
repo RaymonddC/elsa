@@ -190,23 +190,41 @@ code, pre, .font-mono {
 .prose-elsa {
   font-size: 14px;
   line-height: 1.75;
-  color: rgba(255,255,255,0.8);
+  color: rgba(255,255,255,0.85);
 }
 
 .prose-elsa h1, .prose-elsa h2, .prose-elsa h3, .prose-elsa h4 {
-  color: rgba(255,255,255,0.9);
+  color: rgba(255,255,255,0.95);
   font-weight: 600;
-  margin-top: 1.25em;
-  margin-bottom: 0.5em;
-  line-height: 1.4;
+  margin-top: 1.5em;
+  margin-bottom: 0.75em;
+  line-height: 1.3;
+  letter-spacing: -0.015em;
+}
+
+.prose-elsa h2 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #10b981;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 12px;
+  margin-top: 2em;
+  margin-bottom: 1em;
+  padding-bottom: 0.5em;
+  border-bottom: 1px solid rgba(16,185,129,0.2);
 }
 
 .prose-elsa h3 {
   font-size: 15px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
 }
 
 .prose-elsa h4 {
   font-size: 14px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.85);
 }
 
 .prose-elsa p {
@@ -232,8 +250,13 @@ code, pre, .font-mono {
 }
 
 .prose-elsa li {
-  margin-bottom: 0.5em;
+  margin-bottom: 0.6em;
   padding-left: 0.25em;
+  color: rgba(255,255,255,0.8);
+}
+
+.prose-elsa li::marker {
+  color: rgba(16,185,129,0.5);
 }
 
 .prose-elsa li > ul, .prose-elsa li > ol {
@@ -244,10 +267,12 @@ code, pre, .font-mono {
 .prose-elsa code {
   font-family: 'JetBrains Mono', monospace;
   font-size: 12.5px;
-  background: rgba(255,255,255,0.06);
-  padding: 0.15em 0.4em;
-  border-radius: 4px;
-  color: rgba(255,255,255,0.85);
+  background: rgba(16,185,129,0.08);
+  border: 1px solid rgba(16,185,129,0.15);
+  padding: 0.2em 0.5em;
+  border-radius: 6px;
+  color: #34d399;
+  font-weight: 500;
 }
 
 .prose-elsa pre {
@@ -301,8 +326,22 @@ code, pre, .font-mono {
 
 .prose-elsa a {
   color: #34d399;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  background: rgba(16,185,129,0.06);
+  padding: 0.15em 0.4em;
+  border-radius: 5px;
+  border: 1px solid rgba(16,185,129,0.12);
+  transition: all 0.2s ease;
+  display: inline-block;
+  font-weight: 500;
+}
+
+.prose-elsa a:hover {
+  background: rgba(16,185,129,0.12);
+  border-color: rgba(16,185,129,0.25);
+  transform: translateY(-1px);
 }
 
 .prose-elsa > *:first-child {
