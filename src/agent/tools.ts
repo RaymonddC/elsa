@@ -5,7 +5,7 @@
 
 import { esClient, WALLET_TX_INDEX, WALLET_SUMMARY_INDEX } from '../config/elasticsearch';
 import { fetchWalletFromBlockchain, satoshiToBTC, detectChain } from '../services/blockchain';
-import { fetchEthBalance, fetchEthTransactions, fetchEthTokenTransactions, weiToETH, tokenToDecimal } from '../services/etherscan';
+import { fetchEthBalance, fetchEthTransactions, fetchEthTokenTransactions, weiToETH, tokenToDecimal, fetchTokenPricesUSD } from '../services/etherscan';
 import type { WalletTransaction, WalletSummary } from '../types/wallet';
 import { z } from 'zod';
 
@@ -377,7 +377,23 @@ async function fetchEthereumWallet(address: string, limit: number, now: string, 
       }
     }
   }
-  const tokenSummary = Array.from(tokenMap.values()).sort((a, b) => b.tx_count - a.tx_count);
+
+  // Fetch USD prices for ETH and all tokens
+  const tokenContracts = Array.from(tokenMap.values()).map(t => t.contract).filter(Boolean);
+  const prices = await fetchTokenPricesUSD(tokenContracts);
+  const ethPriceUsd = prices.get('eth') || 0;
+
+  const tokenSummary = Array.from(tokenMap.values())
+    .map(t => {
+      const priceUsd = prices.get(t.contract.toLowerCase()) || 0;
+      return {
+        ...t,
+        price_usd: priceUsd || undefined,
+        total_in_usd: priceUsd ? Number((t.total_in * priceUsd).toFixed(2)) : undefined,
+        total_out_usd: priceUsd ? Number((t.total_out * priceUsd).toFixed(2)) : undefined,
+      };
+    })
+    .sort((a, b) => b.tx_count - a.tx_count);
 
   const firstTx = transactions.length > 0
     ? transactions.reduce((a, b) => a.time < b.time ? a : b)
@@ -394,6 +410,10 @@ async function fetchEthereumWallet(address: string, limit: number, now: string, 
     final_balance_eth: weiToETH(balanceWei),
     total_received_eth: Number(totalReceivedEth.toFixed(18)),
     total_sent_eth: Number(totalSentEth.toFixed(18)),
+    eth_price_usd: ethPriceUsd || undefined,
+    total_received_usd: ethPriceUsd ? Number((totalReceivedEth * ethPriceUsd).toFixed(2)) : undefined,
+    total_sent_usd: ethPriceUsd ? Number((totalSentEth * ethPriceUsd).toFixed(2)) : undefined,
+    balance_usd: ethPriceUsd ? Number((weiToETH(balanceWei) * ethPriceUsd).toFixed(2)) : undefined,
     token_summary: tokenSummary.length > 0 ? tokenSummary : undefined,
     first_seen: firstTx ? firstTx.time_iso : undefined,
     last_seen: lastTx ? lastTx.time_iso : undefined,

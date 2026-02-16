@@ -207,3 +207,40 @@ export function weiToETH(wei: string | number): number {
   const ethValue = Number(weiBigInt) / 1e18;
   return Number(ethValue.toFixed(18));
 }
+
+/**
+ * Fetch USD prices for ETH and token contract addresses from CoinGecko
+ * Returns a map of lowercase contract address -> USD price, plus 'eth' -> ETH price
+ */
+export async function fetchTokenPricesUSD(contractAddresses: string[]): Promise<Map<string, number>> {
+  const prices = new Map<string, number>();
+
+  try {
+    // Fetch ETH price
+    const ethRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd');
+    if (ethRes.ok) {
+      const ethData = await ethRes.json();
+      if (ethData.ethereum?.usd) {
+        prices.set('eth', ethData.ethereum.usd);
+      }
+    }
+
+    // Fetch token prices by contract address
+    if (contractAddresses.length > 0) {
+      const contracts = contractAddresses.map(a => a.toLowerCase()).join(',');
+      const tokenRes = await fetch(`https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=${contracts}&vs_currencies=usd`);
+      if (tokenRes.ok) {
+        const tokenData = await tokenRes.json();
+        for (const [addr, priceObj] of Object.entries(tokenData)) {
+          if ((priceObj as any)?.usd) {
+            prices.set(addr.toLowerCase(), (priceObj as any).usd);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to fetch USD prices:', error);
+  }
+
+  return prices;
+}

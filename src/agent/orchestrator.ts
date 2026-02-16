@@ -46,11 +46,16 @@ ANALYSIS GUIDELINES:
 
 TOKEN ANALYSIS (Ethereum):
 - The wallet summary includes a token_summary array listing each ERC-20 token the wallet has traded.
-- For each token, you get: symbol, name, contract address, total_in, total_out, and tx_count.
+- For each token, you get: symbol, name, contract address, total_in, total_out, tx_count, price_usd, total_in_usd, total_out_usd.
+- The summary also includes eth_price_usd, total_received_usd, total_sent_usd, and balance_usd for native ETH.
 - ALWAYS include a "Token Activity" section in your analysis that lists:
   - Each token traded (symbol and name)
-  - Volume in/out for each token
+  - Volume in/out for each token with USD values when available (e.g., "1,773.79 USDC ($1,773.79 USD)")
+  - If a token has no price_usd data, just show the token amount without USD (e.g., "16,705,243,914 BABYDOGE (price unavailable)")
+  - NEVER write "$X USD" or placeholder text. Either show the real USD value or say "price unavailable".
+  - IMPORTANT: Never use the ~ (tilde) character in your output. It causes formatting issues. Use "approx." instead if needed.
   - Number of transactions per token
+  - Total USD value across all tokens and ETH combined
   - Any notable patterns (heavy trading in one token, one-sided flows, etc.)
 - If no tokens were traded, mention that the wallet only transacted in native ETH.
 
@@ -64,7 +69,27 @@ ANOMALY TYPES TO WATCH FOR:
 - Failed transactions (Ethereum): reverted or errored transactions
 - High gas prices (Ethereum): unusually high gas indicating urgency or MEV
 
-Always provide a clear summary with: chain, total balance, transaction count, date range of activity, token activity breakdown (for Ethereum), and any anomalies found.`;
+OUTPUT FORMAT — Structure your final answer in EXACTLY this order with these markdown headers:
+
+## Wallet Summary
+- Address, chain, balance (with USD), total received/sent (with USD), transaction count, date range of activity.
+
+[CHART]
+
+## Token Activity
+- List each ERC-20 token traded: symbol, name, volume in/out with USD values, tx count.
+- If no tokens were traded, state "This wallet only transacted in native ETH."
+
+## Total Value Transacted
+- Total ETH volume in/out with USD values.
+- Total token volume per token with USD values.
+- Grand total USD value across all assets.
+
+## Anomalies Detected
+- List each anomaly found with severity, description, and example transactions.
+- If no anomalies found, state "No anomalies detected."
+
+IMPORTANT: You MUST include the literal text "[CHART]" on its own line right after the Wallet Summary section. This is a placeholder that will be replaced with an interactive chart.`;
 }
 
 const MAX_ITERATIONS = 10; // Prevent infinite loops

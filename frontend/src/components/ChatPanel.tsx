@@ -143,14 +143,42 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
                   </div>
                 ) : (
                   <div className="pl-1 pb-2">
-                    <div className="prose-elsa">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {msg.content}
-                      </ReactMarkdown>
-                    </div>
                     {(() => {
                       const addr = extractWalletAddress(msg);
-                      return addr ? <TransactionChart address={addr} /> : null;
+                      const chartMarker = '[CHART]';
+                      // Escape ~ to prevent GFM strikethrough
+                      const sanitize = (text: string) => text.replace(/~/g, '\\~');
+                      const hasChart = addr && msg.content.includes(chartMarker);
+
+                      if (hasChart) {
+                        const [before, after] = msg.content.split(chartMarker);
+                        return (
+                          <>
+                            <div className="prose-elsa">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {sanitize(before.trim())}
+                              </ReactMarkdown>
+                            </div>
+                            <TransactionChart address={addr} />
+                            <div className="prose-elsa">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {sanitize(after.trim())}
+                              </ReactMarkdown>
+                            </div>
+                          </>
+                        );
+                      }
+
+                      return (
+                        <>
+                          <div className="prose-elsa">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {sanitize(msg.content)}
+                            </ReactMarkdown>
+                          </div>
+                          {addr && <TransactionChart address={addr} />}
+                        </>
+                      );
                     })()}
                   </div>
                 )}

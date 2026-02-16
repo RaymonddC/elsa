@@ -63,6 +63,11 @@ export const WalletSummarySchema = z.object({
   final_balance_eth: z.number().optional(),
   total_received_eth: z.number().optional(),
   total_sent_eth: z.number().optional(),
+  // USD values
+  eth_price_usd: z.number().optional(),
+  total_received_usd: z.number().optional(),
+  total_sent_usd: z.number().optional(),
+  balance_usd: z.number().optional(),
   // Token breakdown
   token_summary: z.array(z.object({
     symbol: z.string(),
@@ -70,6 +75,9 @@ export const WalletSummarySchema = z.object({
     contract: z.string(),
     total_in: z.number(),
     total_out: z.number(),
+    total_in_usd: z.number().optional(),
+    total_out_usd: z.number().optional(),
+    price_usd: z.number().optional(),
     tx_count: z.number(),
   })).optional(),
   // Common
@@ -147,6 +155,11 @@ export const WALLET_SUMMARY_INDEX_MAPPING = {
       final_balance_eth: { type: 'double' as const },
       total_received_eth: { type: 'double' as const },
       total_sent_eth: { type: 'double' as const },
+      // USD values
+      eth_price_usd: { type: 'double' as const },
+      total_received_usd: { type: 'double' as const },
+      total_sent_usd: { type: 'double' as const },
+      balance_usd: { type: 'double' as const },
       // Token breakdown
       token_summary: {
         type: 'nested' as const,
@@ -156,6 +169,9 @@ export const WALLET_SUMMARY_INDEX_MAPPING = {
           contract: { type: 'keyword' as const },
           total_in: { type: 'double' as const },
           total_out: { type: 'double' as const },
+          total_in_usd: { type: 'double' as const },
+          total_out_usd: { type: 'double' as const },
+          price_usd: { type: 'double' as const },
           tx_count: { type: 'integer' as const },
         },
       },
