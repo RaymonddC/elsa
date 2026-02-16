@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, User, Bot } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { ArrowUp } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { ChatMessage } from '../types/agent';
 
 interface ChatPanelProps {
@@ -11,20 +10,30 @@ interface ChatPanelProps {
   isLoading: boolean;
 }
 
-const suggestedQueries = [
-  "Check this Bitcoin wallet 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
-  "Analyze Ethereum wallet 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045",
-  "Detect anomalies in wallet 1BzkoGfrLtL59ZGjhKfvBwy47DEb6oba5f",
+const suggestions = [
+  { label: "Check Bitcoin genesis wallet", query: "Check this Bitcoin wallet 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" },
+  { label: "Analyze Vitalik's ETH wallet", query: "Analyze Ethereum wallet 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
+  { label: "Detect wallet anomalies", query: "Detect anomalies in wallet 1BzkoGfrLtL59ZGjhKfvBwy47DEb6oba5f" },
 ];
 
 export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPanelProps) {
   const [input, setInput] = useState('');
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '48px';
+      const scrollH = textareaRef.current.scrollHeight;
+      if (scrollH > 48) {
+        textareaRef.current.style.height = Math.min(scrollH, 200) + 'px';
+      }
+    }
+  }, [input]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,126 +43,125 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  const inputBox = (placeholder: string) => (
+    <div className="flex items-end rounded-[20px] bg-[#141414] transition-all duration-300 focus-within:bg-[#181818] focus-within:ring-1 focus-within:ring-white/[0.06]">
+      <textarea
+        ref={textareaRef}
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        disabled={isLoading}
+        rows={1}
+        className="flex-1 resize-none bg-transparent text-[14px] text-white/90 placeholder-white/20 pl-5 pr-2 py-3.5 focus:outline-none disabled:opacity-40 min-h-[48px] max-h-[200px]"
+      />
+      <button
+        type="submit"
+        disabled={isLoading || !input.trim()}
+        className="m-1.5 p-2.5 rounded-[14px] bg-white/90 hover:bg-white disabled:opacity-10 transition-all duration-200 flex-shrink-0"
+      >
+        <ArrowUp className="w-4 h-4 text-[#090909]" />
+      </button>
+    </div>
+  );
+
   return (
     <div className="h-full flex flex-col">
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-10 py-12">
-        <div className="max-w-3xl mx-auto">
-          {messages.length === 0 ? (
-            <div className="text-center pt-32">
-              <h2 className="text-4xl font-bold text-white mb-4">What can I help you with?</h2>
-              <p className="text-base text-gray-400 max-w-xl mx-auto mb-10">
-                Paste a Bitcoin or Ethereum wallet address and I'll fetch its transaction history,
-                analyze patterns, and detect anomalies on the blockchain.
-              </p>
-              <Button
-                onClick={() => setShowSuggestions(true)}
-                variant="outline"
-                className="px-5 py-2.5 h-auto rounded-lg bg-[#262626] hover:bg-[#333] border border-[#383838] hover:border-emerald-500 text-sm text-gray-300 font-medium transition-colors"
-              >
-                View Example Queries
-              </Button>
+      <div className="flex-1 overflow-y-auto">
+        {messages.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center px-6 pb-20">
+            <p className="text-white/30 text-[13px] font-medium tracking-widest uppercase mb-6">ELSA</p>
+            <h2 className="text-[32px] font-normal text-white/90 mb-12 tracking-tight">What would you like to analyze?</h2>
+
+            <div className="w-full max-w-[560px] mb-8">
+              <form onSubmit={handleSubmit}>
+                {inputBox("Paste a wallet address...")}
+              </form>
             </div>
-          ) : (
-            <div className="space-y-8">
-              {messages.map((msg, idx) => (
-                <div key={idx} className="flex gap-4">
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                    msg.role === 'user' ? 'bg-[#262626] border border-[#383838]' : 'bg-emerald-500'
-                  }`}>
-                    {msg.role === 'user'
-                      ? <User className="w-4 h-4 text-gray-400" />
-                      : <Bot className="w-4 h-4 text-white" />
-                    }
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm font-bold text-white">{msg.role === 'user' ? 'You' : 'ELSA'}</span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                    <div className={`text-sm leading-relaxed whitespace-pre-wrap ${msg.role === 'user' ? 'text-gray-300' : 'text-gray-200'}`}>
-                      {msg.content}
-                    </div>
-                  </div>
-                </div>
+
+            <div className="flex gap-2 flex-wrap justify-center">
+              {suggestions.map((item, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => onSendMessage(item.query)}
+                  className="px-4 py-2 rounded-full bg-white/[0.04] hover:bg-white/[0.08] text-[13px] text-white/40 hover:text-white/70 transition-all duration-200"
+                >
+                  {item.label}
+                </button>
               ))}
-
-              {/* Loading */}
-              {isLoading && (
-                <div className="flex gap-4">
-                  <div className="w-9 h-9 rounded-lg bg-emerald-500 flex items-center justify-center mt-0.5">
-                    <Bot className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <span className="text-sm font-bold text-white block mb-2">ELSA</span>
-                    <div className="flex items-center gap-2">
-                      <div className="flex gap-1.5">
-                        {[0, 1, 2].map((i) => (
-                          <div key={i} className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" style={{ animationDelay: `${i * 200}ms` }} />
-                        ))}
-                      </div>
-                      <span className="text-sm text-gray-400">Analyzing wallet...</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div ref={messagesEndRef} />
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* Input */}
-      <div className="border-t border-[#2a2a2a] bg-[#151515] px-10 py-6">
-        <div className="max-w-3xl mx-auto">
-          <form onSubmit={handleSubmit} className="flex gap-3">
-            <Input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Enter a Bitcoin or Ethereum wallet address..."
-              disabled={isLoading}
-              className="flex-1 px-4 py-3 h-auto text-sm bg-[#262626] border border-[#383838] rounded-lg text-white placeholder-gray-500 focus-visible:border-emerald-500 focus-visible:ring-1 focus-visible:ring-emerald-500/20 disabled:opacity-50"
-            />
-            <Button
-              type="submit"
-              disabled={isLoading || !input.trim()}
-              className="px-5 py-3 h-auto rounded-lg bg-emerald-500 hover:bg-emerald-600 disabled:opacity-30 flex items-center gap-2 transition-colors"
-            >
-              <Send className="w-4 h-4 text-white" />
-              <span className="text-sm text-white font-semibold">Send</span>
-            </Button>
-          </form>
-          <p className="text-xs text-gray-500 text-center mt-3">
-            Powered by AI — ELSA can make mistakes, please verify critical information
-          </p>
-        </div>
-      </div>
-
-      {/* Suggestions dialog */}
-      <Dialog open={showSuggestions} onOpenChange={setShowSuggestions}>
-        <DialogContent className="max-w-2xl p-0 gap-0 bg-[#111] border-[#262626] [&>button]:hidden">
-          <div className="border-b border-[#262626] px-8 py-6">
-            <DialogTitle className="text-2xl font-bold text-white mb-2">Example Queries</DialogTitle>
-            <DialogDescription className="text-sm text-gray-400">Get started with these common questions</DialogDescription>
           </div>
-          <div className="px-8 py-6 space-y-3">
-            {suggestedQueries.map((query, idx) => (
-              <Button
-                key={idx}
-                onClick={() => { setShowSuggestions(false); onSendMessage(query); }}
-                variant="outline"
-                className="w-full h-auto text-left px-5 py-4 rounded-lg bg-[#1a1a1a] hover:bg-[#262626] border border-[#2a2a2a] hover:border-emerald-500 text-sm text-gray-300 hover:text-white transition-colors"
-              >
-                {query}
-              </Button>
+        ) : (
+          <div className="max-w-[700px] mx-auto px-6 pt-6 pb-4 space-y-6">
+            {messages.map((msg, idx) => (
+              <div key={idx}>
+                <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3 ${
+                  msg.role === 'user'
+                    ? 'bg-white/[0.06]'
+                    : 'bg-emerald-500/[0.08]'
+                }`}>
+                  <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                    msg.role === 'user' ? 'bg-white/60' : 'bg-emerald-400'
+                  }`} />
+                  <span className={`text-[13px] font-bold tracking-wide ${
+                    msg.role === 'user' ? 'text-white/80' : 'text-emerald-400'
+                  }`}>
+                    {msg.role === 'user' ? 'You' : 'ELSA'}
+                  </span>
+                </div>
+                {msg.role === 'user' ? (
+                  <div className="text-[14px] leading-[1.75] whitespace-pre-wrap pl-1 pb-2 text-white/55">
+                    {msg.content}
+                  </div>
+                ) : (
+                  <div className="pl-1 pb-2 prose-elsa">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                )}
+              </div>
             ))}
+
+            {isLoading && (
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3 bg-emerald-500/[0.08]">
+                  <div className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-emerald-400" />
+                  <span className="text-[13px] font-bold tracking-wide text-emerald-400">ELSA</span>
+                </div>
+                <div className="flex items-center gap-1.5 pl-1">
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="w-1 h-1 rounded-full bg-white/25 animate-pulse"
+                      style={{ animationDelay: `${i * 200}ms` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
           </div>
-        </DialogContent>
-      </Dialog>
+        )}
+      </div>
+
+      {messages.length > 0 && (
+        <div className="px-6 pb-5 pt-2">
+          <div className="max-w-[640px] mx-auto">
+            <form onSubmit={handleSubmit}>
+              {inputBox("Ask a follow-up...")}
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -6,21 +6,22 @@ export default function UserMenu() {
   if (!user) return null;
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="group/user flex items-center gap-2.5 px-2 py-1.5">
       <img
         src={user.picture}
         alt={user.name}
-        className="w-8 h-8 rounded-full border border-[#383838]"
+        width={22}
+        height={22}
+        className="w-[22px] h-[22px] rounded-full flex-shrink-0 object-cover opacity-50"
         referrerPolicy="no-referrer"
       />
-      <span className="text-sm text-gray-300 font-medium hidden sm:block">{user.name}</span>
-      <button
+      <span className="text-[13px] text-white/30 truncate flex-1">{user.name}</span>
+      <span
         onClick={logout}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-[#262626] transition-colors"
+        className="text-white/15 hover:text-white/40 cursor-pointer transition-all duration-200 opacity-0 group-hover/user:opacity-100"
       >
-        <LogOut className="w-3.5 h-3.5" />
-        Logout
-      </button>
+        <LogOut className="w-3 h-3" strokeWidth={1.5} />
+      </span>
     </div>
   );
 }
