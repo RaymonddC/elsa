@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChatMessage } from '../types/agent';
 import TransactionChart from './TransactionChart';
+import WalletDashboardCard from './WalletDashboardCard';
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -35,6 +36,36 @@ function extractWalletAddress(msg: ChatMessage): string | null {
   const ethMatch = msg.content.match(/\b(0x[a-fA-F0-9]{40})\b/);
   if (ethMatch) return ethMatch[1];
   return null;
+}
+
+/** Extract wallet stats from message content and agent response */
+function extractWalletStats(msg: ChatMessage) {
+  const content = msg.content.toLowerCase();
+
+  // Extract balance (look for patterns like "$123,456.78" or "balance: 1.5 BTC")
+  const balanceMatch = content.match(/\$[\d,]+\.?\d*/);
+  const balance = balanceMatch ? parseFloat(balanceMatch[0].replace(/[$,]/g, '')) : undefined;
+
+  // Extract transaction count
+  const txMatch = content.match(/(\d+)\s*transactions?/i);
+  const transactionCount = txMatch ? parseInt(txMatch[1].replace(/,/g, '')) : undefined;
+
+  // Extract risk score
+  let riskScore: 'Low' | 'Medium' | 'High' | undefined;
+  if (content.includes('low risk') || content.includes('risk: low')) riskScore = 'Low';
+  else if (content.includes('medium risk') || content.includes('moderate risk')) riskScore = 'Medium';
+  else if (content.includes('high risk') || content.includes('risk: high')) riskScore = 'High';
+
+  // Extract last activity (look for time patterns like "2 hours ago", "3 days ago")
+  const timeMatch = content.match(/(\d+)\s*(hour|day|week|month)s?\s*ago/i);
+  const lastActivity = timeMatch ? timeMatch[0] : undefined;
+
+  return {
+    balance,
+    transactionCount,
+    riskScore,
+    lastActivity,
+  };
 }
 
 export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPanelProps) {
@@ -142,9 +173,10 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
                     {msg.content}
                   </div>
                 ) : (
-                  <div className="pl-1 pb-2">
+                  <div className="pl-1 pb-2 space-y-4">
                     {(() => {
                       const addr = extractWalletAddress(msg);
+                      const stats = extractWalletStats(msg);
                       const chartMarker = '[CHART]';
                       // Escape ~ to prevent GFM strikethrough
                       const sanitize = (text: string) => text.replace(/~/g, '\\~');
@@ -154,6 +186,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
                         const [before, after] = msg.content.split(chartMarker);
                         return (
                           <>
+                            {addr && <WalletDashboardCard address={addr} stats={stats} />}
                             <div className="prose-elsa">
                               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                 {sanitize(before.trim())}
@@ -171,6 +204,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading }: ChatPa
 
                       return (
                         <>
+                          {addr && <WalletDashboardCard address={addr} stats={stats} />}
                           <div className="prose-elsa">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
                               {sanitize(msg.content)}
