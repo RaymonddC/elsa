@@ -147,24 +147,53 @@ function App() {
     <div className="h-screen w-screen bg-[#090909] flex overflow-hidden">
       <ToastContainer />
 
-      <ChatSidebar
-        currentSessionId={currentSessionId}
-        onSessionSelect={handleSessionSelect}
-        onNewChat={handleNewChat}
-        refreshTrigger={sidebarRefresh}
-        isOpen={sidebarOpen}
-        onToggle={() => setSidebarOpen((v) => !v)}
-      />
+      {/* Sidebar - hidden on mobile by default */}
+      <div className={`
+        ${sidebarOpen ? 'block' : 'hidden'} md:block
+        fixed md:relative inset-0 md:inset-auto z-40 md:z-auto
+      `}>
+        {/* Mobile backdrop */}
+        {sidebarOpen && (
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
 
+        <div className="relative">
+          <ChatSidebar
+            currentSessionId={currentSessionId}
+            onSessionSelect={handleSessionSelect}
+            onNewChat={handleNewChat}
+            refreshTrigger={sidebarRefresh}
+            isOpen={sidebarOpen}
+            onToggle={() => setSidebarOpen((v) => !v)}
+          />
+        </div>
+      </div>
+
+      {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 relative">
+        {/* Hamburger Menu (mobile only) */}
         {!sidebarOpen && (
           <button
             onClick={() => setSidebarOpen(true)}
-            className="absolute top-4 left-4 z-10 p-1 text-white/20 hover:text-white/50 transition-all duration-200 opacity-0 hover:opacity-100"
+            className="absolute top-4 left-4 z-10 p-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-white/60 hover:text-white/90 transition-all duration-200 md:hidden"
+          >
+            <PanelLeft className="w-5 h-5" strokeWidth={1.5} />
+          </button>
+        )}
+
+        {/* Desktop toggle (always visible when closed) */}
+        {!sidebarOpen && (
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="hidden md:block absolute top-4 left-4 z-10 p-1 text-white/20 hover:text-white/50 transition-all duration-200 opacity-0 hover:opacity-100"
           >
             <PanelLeft className="w-4 h-4" strokeWidth={1.5} />
           </button>
         )}
+
         <ChatPanel messages={messages} onSendMessage={handleSendMessage} isLoading={isLoading} />
       </div>
     </div>
