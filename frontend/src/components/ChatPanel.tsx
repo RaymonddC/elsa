@@ -177,12 +177,12 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center px-6 pb-20 animate-[fadeIn_0.5s_ease-out]">
             {/* Logo */}
-            <div className="relative animate-[scaleIn_0.5s_ease-out]" style={{ marginBottom: '0px', animation: 'scaleIn 0.5s ease-out, float 4s ease-in-out 1s infinite' }}>
-              <div className="absolute inset-0 bg-gradient-to-r from-primary via-accent to-primary bg-[length:200%_100%] animate-pulse blur-2xl opacity-20"></div>
-              <img src="/elsa-logo.PNG" alt="ELSA" className="relative object-contain" style={{ width: '64px', height: '64px' }} />
+            <div className="relative" style={{ marginBottom: '4px', animation: 'scaleIn 0.5s ease-out, float 4s ease-in-out 1s infinite' }}>
+              <div className="absolute inset-0" style={{ background: 'radial-gradient(circle, rgba(16,185,129,0.2) 0%, transparent 70%)', filter: 'blur(16px)', transform: 'scale(2)' }} />
+              <img src="/elsa-logo.PNG" alt="ELSA" className="relative object-contain" style={{ width: '56px', height: '56px' }} />
             </div>
-            <h1 style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '22px', fontWeight: 600, marginTop: '0px', marginBottom: '8px', color: 'rgba(255,255,255,0.9)', letterSpacing: '-0.02em', animation: 'slideUp 0.5s ease-out 0.1s both' }}>ELSA</h1>
-            <p className="text-white/30 text-center" style={{ fontSize: '14px', marginBottom: '16px', animation: 'slideUp 0.5s ease-out 0.2s both' }}>
+            <h1 style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '20px', fontWeight: 600, marginTop: '0px', marginBottom: '6px', color: 'rgba(255,255,255,0.92)', letterSpacing: '0.04em', animation: 'slideUp 0.5s ease-out 0.1s both' }}>ELSA</h1>
+            <p style={{ fontSize: '13px', marginBottom: '16px', color: 'rgba(16,185,129,0.4)', animation: 'slideUp 0.5s ease-out 0.2s both', textAlign: 'center' }}>
               Analyze any crypto wallet with AI-powered insights
             </p>
 

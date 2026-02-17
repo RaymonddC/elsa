@@ -108,6 +108,8 @@ export default function ChatSidebar({ currentSessionId, onSessionSelect, onNewCh
     return groups;
   }, [sessions]);
 
+  let sessionIndex = 0;
+
   return (
     <div
       className="bg-[#1a1a1a]/95 border-r-2 border-white/[0.1] flex flex-col flex-shrink-0 h-full transition-[width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] overflow-hidden shadow-[4px_0_24px_-2px_rgba(0,0,0,0.8)]"
@@ -123,13 +125,13 @@ export default function ChatSidebar({ currentSessionId, onSessionSelect, onNewCh
           <div className="flex items-center opacity-0 group-hover/header:opacity-100 transition-opacity duration-200" style={{ gap: '6px' }}>
             <span
               onClick={onNewChat}
-              className="text-white/15 hover:text-white/40 cursor-pointer transition-all duration-200"
+              className="text-white/15 hover:text-white/40 hover:scale-110 cursor-pointer transition-all duration-200"
             >
               <Plus style={{ width: '14px', height: '14px' }} strokeWidth={1.5} />
             </span>
             <span
               onClick={onToggle}
-              className="text-white/15 hover:text-white/40 cursor-pointer transition-all duration-200"
+              className="text-white/15 hover:text-white/40 hover:scale-110 cursor-pointer transition-all duration-200"
             >
               <PanelLeftClose style={{ width: '14px', height: '14px' }} strokeWidth={1.5} />
             </span>
@@ -137,54 +139,73 @@ export default function ChatSidebar({ currentSessionId, onSessionSelect, onNewCh
         </div>
 
         {/* Divider */}
-        <div className="border-t border-white/[0.06]" style={{ margin: '0 16px' }} />
+        <div style={{ margin: '0 16px', height: '1px', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.06) 50%, transparent)' }} />
 
         {/* Sessions */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden" style={{ padding: '10px 16px 12px', scrollbarWidth: 'none' }}>
           <p className="text-white/30 uppercase font-semibold" style={{ fontSize: '12px', marginBottom: '10px', letterSpacing: '0.1em' }}>Chat History</p>
           {sessions.length === 0 ? (
-            <p className="text-white/15 text-center" style={{ fontSize: '11px', paddingTop: '48px' }}>No conversations yet</p>
+            <div className="flex flex-col items-center" style={{ paddingTop: '48px', animation: 'fadeIn 0.5s ease-out' }}>
+              <p className="text-white/15" style={{ fontSize: '11px' }}>No conversations yet</p>
+              <span
+                onClick={onNewChat}
+                className="cursor-pointer transition-all duration-200"
+                style={{ fontSize: '11px', color: 'rgba(16,185,129,0.5)', marginTop: '8px' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'rgba(16,185,129,0.8)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(16,185,129,0.5)'; }}
+              >
+                Start a new chat
+              </span>
+            </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {groupedSessions.map((group) => (
                 <div key={group.label}>
                   <p className="text-white/20 uppercase font-medium" style={{ fontSize: '9px', letterSpacing: '0.08em', padding: '0 8px 6px' }}>{group.label}</p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    {group.sessions.map((session) => (
-                      <div
-                        key={session.id}
-                        onClick={() => onSessionSelect(session.id)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            onSessionSelect(session.id);
-                          }
-                        }}
-                        tabIndex={0}
-                        role="button"
-                        aria-label={`Select chat: ${session.title || 'New Chat'}`}
-                        className={`relative flex items-center gap-2 rounded-[8px] cursor-pointer group transition-all duration-200 focus:outline-none ${
-                          currentSessionId === session.id
-                            ? 'text-white/85'
-                            : 'text-white/30 hover:text-white/55'
-                        }`}
-                        style={{ padding: '7px 10px' }}
-                      >
-                        <div className="flex-1 min-w-0 flex items-center justify-between" style={{ gap: '8px' }}>
-                          <span className="truncate leading-snug" style={{ fontSize: '11px', maxWidth: '170px' }}>{session.title || 'New Chat'}</span>
-                          <span className="text-white/15 flex-shrink-0" style={{ fontSize: '9px' }}>{getRelativeTime(session.updated_at)}</span>
-                        </div>
-                        <span
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDelete(e, session.id);
+                    {group.sessions.map((session) => {
+                      const idx = sessionIndex++;
+                      return (
+                        <div
+                          key={session.id}
+                          onClick={() => onSessionSelect(session.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              onSessionSelect(session.id);
+                            }
                           }}
-                          className="opacity-0 group-hover:opacity-100 text-white/15 hover:text-white/40 cursor-pointer transition-all duration-200" style={{ marginLeft: '6px' }}
+                          tabIndex={0}
+                          role="button"
+                          aria-label={`Select chat: ${session.title || 'New Chat'}`}
+                          className={`relative flex items-center gap-2 cursor-pointer group transition-all duration-200 focus:outline-none ${
+                            currentSessionId === session.id
+                              ? 'text-white/85'
+                              : 'text-white/30 hover:text-white/55'
+                          }`}
+                          style={{
+                            padding: '7px 10px',
+                            borderRadius: '8px',
+                            animation: `slideUp 0.3s ease-out ${Math.min(idx * 0.04, 0.4)}s both`,
+                            borderLeft: currentSessionId === session.id ? '2px solid #10b981' : '2px solid transparent',
+                          }}
                         >
-                          <Trash2 style={{ width: '13px', height: '13px' }} strokeWidth={1.5} />
-                        </span>
-                      </div>
-                    ))}
+                          <div className="flex-1 min-w-0 flex items-center justify-between" style={{ gap: '8px' }}>
+                            <span className="truncate leading-snug" style={{ fontSize: '11px', maxWidth: '170px' }}>{session.title || 'New Chat'}</span>
+                            <span className="text-white/15 flex-shrink-0" style={{ fontSize: '9px' }}>{getRelativeTime(session.updated_at)}</span>
+                          </div>
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(e, session.id);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 text-white/15 hover:text-white/40 cursor-pointer transition-all duration-200" style={{ marginLeft: '6px' }}
+                          >
+                            <Trash2 style={{ width: '13px', height: '13px' }} strokeWidth={1.5} />
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -193,7 +214,7 @@ export default function ChatSidebar({ currentSessionId, onSessionSelect, onNewCh
         </div>
 
         {/* User - Pinned to Bottom */}
-        <div className="mt-auto border-t border-white/[0.06]" style={{ padding: '10px 16px 14px 16px' }}>
+        <div className="mt-auto" style={{ padding: '10px 16px 14px 16px', borderTop: '1px solid transparent', backgroundImage: 'linear-gradient(rgba(255,255,255,0.06), rgba(255,255,255,0.06)) no-repeat top/100% 1px' }}>
           <UserMenu />
         </div>
       </div>
