@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, AlertCircle, RotateCcw } from 'lucide-react';
+import { ArrowUp, AlertCircle, RotateCcw, ChevronDown, ChevronUp, Database, Search, Shield, Brain, CheckCircle2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChatMessage } from '../types/agent';
@@ -10,10 +10,18 @@ import { useToast } from '../hooks/useToast';
 import { validateWallet } from '../utils/walletValidation';
 
 
+interface LiveStep {
+  type: string;
+  message: string;
+  tool_name?: string;
+  execution_time_ms?: number;
+}
+
 interface ChatPanelProps {
   messages: ChatMessage[];
   onSendMessage: (message: string) => void;
   isLoading: boolean;
+  liveSteps?: LiveStep[];
   sessionTitle?: string;
 }
 
@@ -164,8 +172,50 @@ const placeholderHints = [
   'Check transaction history...',
 ];
 
-export default function ChatPanel({ messages, onSendMessage, isLoading, sessionTitle }: ChatPanelProps) {
+const TOOL_ICONS: Record<string, typeof Database> = {
+  fetch_wallet_data: Database,
+  get_wallet_summary: Search,
+  search_transactions: Search,
+  detect_anomalies: Shield,
+};
+
+interface ConsolidatedStep {
+  label: string;
+  tool_name?: string;
+  done: boolean;
+  time_ms?: number;
+}
+
+/** Merge raw liveSteps into simple consolidated lines */
+function consolidateSteps(steps: LiveStep[]): ConsolidatedStep[] {
+  const result: ConsolidatedStep[] = [];
+  const seenTools = new Map<string, number>(); // tool_name -> index in result
+
+  for (const s of steps) {
+    if (s.type === 'thinking') {
+      // Only add one "Thinking" entry
+      if (!result.some(r => r.label === 'Thinking')) {
+        result.push({ label: 'Thinking', done: true });
+      }
+    } else if (s.type === 'tool_start' && s.tool_name) {
+      const idx = result.length;
+      seenTools.set(s.tool_name, idx);
+      result.push({ label: s.message, tool_name: s.tool_name, done: false });
+    } else if (s.type === 'tool_done' && s.tool_name) {
+      const idx = seenTools.get(s.tool_name);
+      if (idx != null && result[idx]) {
+        result[idx].done = true;
+        result[idx].time_ms = s.execution_time_ms;
+      }
+    }
+  }
+  return result;
+}
+
+export default function ChatPanel({ messages, onSendMessage, isLoading, liveSteps = [], sessionTitle }: ChatPanelProps) {
   const [input, setInput] = useState('');
+  const [stepsExpanded, setStepsExpanded] = useState(false);
+  const [completedSteps, setCompletedSteps] = useState<ConsolidatedStep[]>([]);
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -182,6 +232,31 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Track latest non-empty steps so we don't lose them when App clears liveSteps before isLoading goes false
+  const lastStepsRef = useRef<LiveStep[]>([]);
+  useEffect(() => {
+    if (liveSteps.length > 0) {
+      lastStepsRef.current = liveSteps;
+    }
+  }, [liveSteps]);
+
+  // Save consolidated steps when loading finishes
+  const prevLoading = useRef(false);
+  useEffect(() => {
+    if (prevLoading.current && !isLoading) {
+      if (lastStepsRef.current.length > 0) {
+        setCompletedSteps(consolidateSteps(lastStepsRef.current));
+        lastStepsRef.current = [];
+      }
+      setStepsExpanded(false);
+    }
+    if (isLoading && !prevLoading.current) {
+      setCompletedSteps([]);
+      setStepsExpanded(false);
+    }
+    prevLoading.current = isLoading;
+  }, [isLoading]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -335,9 +410,49 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
                   </div>
                 ) : (
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#10b981', letterSpacing: '0.03em' }}>ELSA</span>
+                    {/* ELSA label + completed steps toggle inline */}
+                    <div style={{ marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#10b981', letterSpacing: '0.03em' }}>ELSA</span>
+                        {!isLoading && completedSteps.length > 0 && idx === messages.length - 1 && msg.role === 'assistant' && (
+                          <span
+                            onClick={() => setStepsExpanded(v => !v)}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', padding: '2px 8px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)', transition: 'all 0.15s ease' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.03)'; }}
+                          >
+                            <CheckCircle2 style={{ width: '10px', height: '10px', color: 'rgba(16,185,129,0.4)' }} strokeWidth={1.5} />
+                            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)' }}>
+                              {completedSteps.filter(s => s.tool_name).length} steps
+                            </span>
+                            {stepsExpanded
+                              ? <ChevronUp style={{ width: '10px', height: '10px', color: 'rgba(255,255,255,0.12)' }} strokeWidth={1.5} />
+                              : <ChevronDown style={{ width: '10px', height: '10px', color: 'rgba(255,255,255,0.12)' }} strokeWidth={1.5} />
+                            }
+                          </span>
+                        )}
+                      </div>
+                      {/* Expanded steps dropdown */}
+                      {!isLoading && stepsExpanded && completedSteps.length > 0 && idx === messages.length - 1 && msg.role === 'assistant' && (
+                        <div style={{ marginTop: '6px', marginLeft: '2px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          {completedSteps.map((step, i) => {
+                            const Icon = step.tool_name ? (TOOL_ICONS[step.tool_name] || Brain) : Brain;
+                            return (
+                              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '2px 2px' }}>
+                                <Icon style={{ width: '10px', height: '10px', color: 'rgba(16,185,129,0.3)', flexShrink: 0 }} strokeWidth={1.5} />
+                                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)' }}>{step.label}</span>
+                                {step.time_ms != null && (
+                                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.08)', marginLeft: 'auto' }}>
+                                    {step.time_ms > 1000 ? `${(step.time_ms / 1000).toFixed(1)}s` : `${step.time_ms}ms`}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
+
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {(() => {
                         // Check if this is an error message
@@ -518,39 +633,67 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
               </div>
             ))}
 
-            {isLoading && (
-              <div style={{ marginTop: '20px', animation: 'fadeIn 0.3s ease-out' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 600, color: '#10b981', letterSpacing: '0.03em' }}>ELSA</span>
-                </div>
-                <div style={{
-                  borderRadius: '14px',
-                  backgroundColor: 'rgba(255,255,255,0.02)',
-                  border: '1px solid rgba(255,255,255,0.05)',
-                  padding: '16px 18px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                }}>
-                  {/* Animated dots */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    {[0, 1, 2].map((i) => (
-                      <div
-                        key={i}
-                        style={{
-                          width: '6px',
-                          height: '6px',
-                          borderRadius: '50%',
-                          backgroundColor: '#10b981',
-                          animation: `elsa-dot 1.4s ease-in-out ${i * 0.2}s infinite`,
-                        }}
-                      />
-                    ))}
+            {isLoading && (() => {
+              const consolidated = consolidateSteps(liveSteps);
+              const currentLabel = consolidated.length > 0
+                ? (consolidated.filter(s => !s.done).pop()?.label || consolidated[consolidated.length - 1].label)
+                : 'Analyzing wallet...';
+              const doneCount = consolidated.filter(s => s.done && s.tool_name).length;
+              const totalTools = consolidated.filter(s => s.tool_name).length;
+
+              return (
+                <div style={{ marginTop: '20px', animation: 'fadeIn 0.3s ease-out' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: '#10b981', letterSpacing: '0.03em' }}>ELSA</span>
                   </div>
-                  <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.3)', fontWeight: 500 }}>Analyzing wallet...</span>
+                  <div
+                    style={{ borderRadius: '14px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', padding: '14px 16px', cursor: consolidated.length > 0 ? 'pointer' : 'default' }}
+                    onClick={() => consolidated.length > 0 && setStepsExpanded(v => !v)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {[0, 1, 2].map((i) => (
+                            <div key={i} style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#10b981', animation: `elsa-dot 1.4s ease-in-out ${i * 0.2}s infinite` }} />
+                          ))}
+                        </div>
+                        <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>{currentLabel}</span>
+                      </div>
+                      {totalTools > 0 && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.15)' }}>{doneCount}/{totalTools}</span>
+                          {stepsExpanded
+                            ? <ChevronUp style={{ width: '13px', height: '13px', color: 'rgba(255,255,255,0.15)' }} strokeWidth={1.5} />
+                            : <ChevronDown style={{ width: '13px', height: '13px', color: 'rgba(255,255,255,0.15)' }} strokeWidth={1.5} />
+                          }
+                        </div>
+                      )}
+                    </div>
+                    {stepsExpanded && consolidated.length > 0 && (
+                      <div style={{ marginTop: '10px', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {consolidated.map((step, i) => {
+                          const Icon = step.tool_name ? (TOOL_ICONS[step.tool_name] || Brain) : Brain;
+                          return (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 4px' }}>
+                              {step.done
+                                ? <CheckCircle2 style={{ width: '11px', height: '11px', color: 'rgba(16,185,129,0.4)', flexShrink: 0 }} strokeWidth={1.5} />
+                                : <Icon style={{ width: '11px', height: '11px', color: '#10b981', flexShrink: 0, animation: 'elsa-dot 1.4s ease-in-out infinite' }} strokeWidth={1.5} />
+                              }
+                              <span style={{ fontSize: '11px', color: step.done ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.45)', fontWeight: step.done ? 400 : 500 }}>{step.label}</span>
+                              {step.done && step.time_ms != null && (
+                                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.1)', marginLeft: 'auto' }}>
+                                  {step.time_ms > 1000 ? `${(step.time_ms / 1000).toFixed(1)}s` : `${step.time_ms}ms`}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             <div ref={messagesEndRef} />
           </div>

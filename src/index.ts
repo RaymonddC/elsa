@@ -9,7 +9,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { analyzeQuestion } from './agent/orchestrator';
+import { analyzeQuestion, type StepEvent } from './agent/orchestrator';
 import { testConnection, esClient, WALLET_TX_INDEX } from './config/elasticsearch';
 import { z } from 'zod';
 import authRoutes from './routes/auth';
@@ -162,6 +162,36 @@ app.post('/analyze', requireAuth, async (req: AuthRequest, res) => {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
       });
+    }
+  }
+});
+
+// SSE streaming analyze endpoint
+app.post('/analyze-stream', requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { question } = AnalyzeRequestSchema.parse(req.body);
+
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const sendEvent = (event: StepEvent) => {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+
+    const response = await analyzeQuestion(question, sendEvent);
+
+    // Send final result
+    res.write(`data: ${JSON.stringify({ type: 'result', ...response })}\n\n`);
+    res.end();
+  } catch (error) {
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+    } else {
+      res.write(`data: ${JSON.stringify({ type: 'error', message: error instanceof Error ? error.message : 'Unknown error' })}\n\n`);
+      res.end();
     }
   }
 });

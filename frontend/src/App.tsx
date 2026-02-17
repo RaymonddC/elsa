@@ -15,6 +15,7 @@ function App() {
   const { showToast } = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [liveSteps, setLiveSteps] = useState<Array<{ type: string; message: string; tool_name?: string }>>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [currentSessionTitle, setCurrentSessionTitle] = useState<string>('');
   const [sidebarRefresh, setSidebarRefresh] = useState(0);
@@ -97,11 +98,12 @@ function App() {
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setIsLoading(true);
+    setLiveSteps([]);
 
     const sessionId = await saveSession(updatedMessages, currentSessionId);
 
     try {
-      const response = await fetch(`${API_URL}/analyze`, {
+      const response = await fetch(`${API_URL}/analyze-stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ question }),
@@ -109,7 +111,39 @@ function App() {
 
       if (!response.ok) throw new Error(`API error: ${response.statusText}`);
 
-      const agentResponse: AgentResponse = await response.json();
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let agentResponse: AgentResponse | null = null;
+      let buffer = '';
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const event = JSON.parse(line.slice(6));
+              if (event.type === 'result') {
+                agentResponse = event as AgentResponse;
+              } else if (event.type === 'error') {
+                throw new Error(event.message);
+              } else {
+                setLiveSteps(prev => [...prev, { type: event.type, message: event.message, tool_name: event.tool_name, execution_time_ms: event.execution_time_ms }]);
+              }
+            } catch (e) {
+              if (e instanceof Error && e.message !== 'Unexpected end of JSON input') throw e;
+            }
+          }
+        }
+      }
+
+      if (!agentResponse) throw new Error('No response received from agent');
 
       const assistantMessage: ChatMessage = {
         role: 'assistant',
@@ -120,6 +154,7 @@ function App() {
 
       const finalMessages = [...updatedMessages, assistantMessage];
       setMessages(finalMessages);
+      setLiveSteps([]);
       await saveSession(finalMessages, sessionId);
 
       showToast({
@@ -131,7 +166,7 @@ function App() {
       showToast({
         type: 'error',
         message: error instanceof Error ? error.message : 'Failed to analyze wallet. Please try again.',
-        duration: undefined, // Requires manual dismiss
+        duration: undefined,
       });
 
       const errorMessage: ChatMessage = {
@@ -141,6 +176,7 @@ function App() {
       };
       const finalMessages = [...updatedMessages, errorMessage];
       setMessages(finalMessages);
+      setLiveSteps([]);
       await saveSession(finalMessages, sessionId);
     } finally {
       setIsLoading(false);
@@ -204,6 +240,7 @@ function App() {
           messages={messages}
           onSendMessage={handleSendMessage}
           isLoading={isLoading}
+          liveSteps={liveSteps}
           sessionTitle={currentSessionTitle}
         />
       </div>

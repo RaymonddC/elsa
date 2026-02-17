@@ -98,7 +98,18 @@ const MAX_ITERATIONS = 10; // Prevent infinite loops
 /**
  * Main agent loop with Glass Box transparency
  */
-export async function analyzeQuestion(question: string): Promise<AgentResponse> {
+export type StepEvent = {
+  type: 'thinking' | 'tool_start' | 'tool_done' | 'done' | 'error';
+  step_number: number;
+  message: string;
+  tool_name?: string;
+  execution_time_ms?: number;
+};
+
+export async function analyzeQuestion(
+  question: string,
+  onStep?: (event: StepEvent) => void,
+): Promise<AgentResponse> {
   const startTime = Date.now();
   const reasoningSteps: ReasoningStep[] = [];
   let stepNumber = 0;
@@ -118,6 +129,8 @@ export async function analyzeQuestion(question: string): Promise<AgentResponse> 
       iteration++;
 
       console.log(`\n=== Iteration ${iteration} ===`);
+
+      onStep?.({ type: 'thinking', step_number: stepNumber + 1, message: 'Thinking...' });
 
       // Call LLM
       const response = await openai.chat.completions.create({
@@ -144,6 +157,14 @@ export async function analyzeQuestion(question: string): Promise<AgentResponse> 
           console.log(`\nTool Call: ${toolName}`);
           console.log('Arguments:', JSON.stringify(toolArgs, null, 2));
 
+          const toolLabel: Record<string, string> = {
+            fetch_wallet_data: 'Fetching wallet data',
+            get_wallet_summary: 'Getting wallet summary',
+            search_transactions: 'Searching transactions',
+            detect_anomalies: 'Detecting anomalies',
+          };
+          onStep?.({ type: 'tool_start', step_number: stepNumber, message: toolLabel[toolName] || `Running ${toolName}`, tool_name: toolName });
+
           // Log tool call in reasoning steps
           const toolCallLog: ToolCall = {
             tool_name: toolName,
@@ -155,6 +176,8 @@ export async function analyzeQuestion(question: string): Promise<AgentResponse> 
           const toolResult = await executeTool(toolName, toolArgs);
 
           console.log(`Tool Result: ${JSON.stringify(toolResult).substring(0, 200)}...`);
+
+          onStep?.({ type: 'tool_done', step_number: stepNumber, message: `${toolLabel[toolName] || toolName} complete`, tool_name: toolName, execution_time_ms: toolResult.execution_time_ms });
 
           // Log tool result in reasoning steps
           const toolResultLog: ToolResult = {
@@ -194,6 +217,7 @@ export async function analyzeQuestion(question: string): Promise<AgentResponse> 
         });
 
         console.log('\nFinal Answer:', finalAnswer);
+        onStep?.({ type: 'done', step_number: stepNumber, message: 'Analysis complete' });
       }
     }
 
