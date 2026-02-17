@@ -65,7 +65,10 @@ export default function ChatSidebar({ currentSessionId, onSessionSelect, onNewCh
       <div className="w-[260px] flex flex-col h-full">
         {/* Header */}
         <div className="group/header px-4 pt-4 pb-2 flex items-center justify-between">
-          <span className="text-[13px] font-bold text-white/50 tracking-wider uppercase" style={{ fontFamily: 'Orbitron, sans-serif' }}>ELSA</span>
+          <div className="flex items-center gap-1.5">
+            <img src="/elsa-logo.PNG" alt="ELSA" style={{ width: '14px', height: '14px' }} className="object-contain" />
+            <span className="text-[13px] font-bold text-white/50 tracking-wider uppercase" style={{ fontFamily: 'Orbitron, sans-serif' }}>ELSA</span>
+          </div>
           <div className="flex items-center gap-1 opacity-0 group-hover/header:opacity-100 transition-opacity duration-200">
             <button
               onClick={onNewChat}

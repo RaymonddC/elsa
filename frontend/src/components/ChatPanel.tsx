@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Sparkles, Search, BarChart3, Zap, Bitcoin } from 'lucide-react';
+import { ArrowUp, Search, BarChart3, Zap, Bitcoin } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChatMessage } from '../types/agent';
@@ -164,16 +164,11 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
       <div className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center px-6 pb-20">
-            {/* Logo with gradient animation */}
+            {/* Logo */}
             <div className="mb-6 relative">
               <div className="absolute inset-0 bg-gradient-to-r from-primary via-accent to-primary bg-[length:200%_100%] animate-pulse blur-2xl opacity-20"></div>
-              <div className="relative">
-                <Sparkles className="w-16 h-16 text-primary" strokeWidth={1.5} />
-              </div>
+              <img src="/elsa-logo.PNG" alt="ELSA" style={{ width: '64px', height: '64px' }} className="relative object-contain" />
             </div>
-
-            {/* Heading */}
-            <p className="text-white/30 text-[13px] font-semibold tracking-widest uppercase mb-3">ELSA</p>
             <h1 className="text-[36px] md:text-[42px] font-display font-semibold text-white/90 mb-3 tracking-tight text-center">
               Analyze Crypto Wallets
               <br />
