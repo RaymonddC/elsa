@@ -24,7 +24,6 @@ const suggestions = [
 
 /** Extract wallet address from message (agentResponse or content fallback) */
 function extractWalletAddress(msg: ChatMessage): string | null {
-  // Try agentResponse (camelCase from fresh query, or snake_case from saved session)
   const agent = msg.agentResponse || (msg as any).agent_response;
   if (agent?.reasoning_steps) {
     for (const step of agent.reasoning_steps) {
@@ -34,7 +33,6 @@ function extractWalletAddress(msg: ChatMessage): string | null {
       }
     }
   }
-  // Fallback: regex from the markdown content
   const btcMatch = msg.content.match(/\b(1[a-km-zA-HJ-NP-Z1-9]{25,34}|3[a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-zA-HJ-NP-Z0-9]{25,62})\b/);
   if (btcMatch) return btcMatch[1];
   const ethMatch = msg.content.match(/\b(0x[a-fA-F0-9]{40})\b/);
@@ -46,30 +44,21 @@ function extractWalletAddress(msg: ChatMessage): string | null {
 function extractWalletStats(msg: ChatMessage) {
   const content = msg.content.toLowerCase();
 
-  // Extract balance (look for patterns like "$123,456.78" or "balance: 1.5 BTC")
   const balanceMatch = content.match(/\$[\d,]+\.?\d*/);
   const balance = balanceMatch ? parseFloat(balanceMatch[0].replace(/[$,]/g, '')) : undefined;
 
-  // Extract transaction count
   const txMatch = content.match(/(\d+)\s*transactions?/i);
   const transactionCount = txMatch ? parseInt(txMatch[1].replace(/,/g, '')) : undefined;
 
-  // Extract risk score
   let riskScore: 'Low' | 'Medium' | 'High' | undefined;
   if (content.includes('low risk') || content.includes('risk: low')) riskScore = 'Low';
   else if (content.includes('medium risk') || content.includes('moderate risk')) riskScore = 'Medium';
   else if (content.includes('high risk') || content.includes('risk: high')) riskScore = 'High';
 
-  // Extract last activity (look for time patterns like "2 hours ago", "3 days ago")
   const timeMatch = content.match(/(\d+)\s*(hour|day|week|month)s?\s*ago/i);
   const lastActivity = timeMatch ? timeMatch[0] : undefined;
 
-  return {
-    balance,
-    transactionCount,
-    riskScore,
-    lastActivity,
-  };
+  return { balance, transactionCount, riskScore, lastActivity };
 }
 
 const placeholderHints = [
@@ -111,7 +100,6 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    // Validate wallet if it looks like an address
     const validation = validateWallet(input);
     if (!validation.valid && (input.includes('0x') || /^[13bc1]/.test(input))) {
       showToast({
@@ -134,7 +122,24 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
   };
 
   const inputBox = (placeholder: string) => (
-    <div className="flex items-center transition-all duration-300 focus-within:border-white/[0.12]" style={{ borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', padding: '4px 4px 4px 0', minHeight: '44px' }}>
+    <div
+      className="flex items-center transition-all duration-300"
+      style={{
+        borderRadius: '16px',
+        backgroundColor: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.07)',
+        padding: '4px 4px 4px 0',
+        minHeight: '44px',
+      }}
+      onFocus={(e) => {
+        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
+        e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.04)';
+      }}
+      onBlur={(e) => {
+        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.07)';
+        e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.03)';
+      }}
+    >
       <textarea
         ref={textareaRef}
         value={input}
@@ -158,15 +163,15 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
   );
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Chat Header - Only show when there are messages */}
+    <div className="h-full flex flex-col" style={{ background: 'linear-gradient(180deg, #090909 0%, #0a0a0a 100%)' }}>
+      {/* Chat Header */}
       {messages.length > 0 && sessionTitle && (
-        <div className="flex-shrink-0 border-b border-white/[0.06] bg-[#0a0a0a]/80 backdrop-blur-xl">
-          <div className="max-w-[700px] mx-auto px-6 py-4">
-            <h1 className="text-[15px] font-semibold text-white/90 truncate tracking-tight">
+        <div className="flex-shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: 'rgba(9,9,9,0.9)', backdropFilter: 'blur(12px)' }}>
+          <div style={{ maxWidth: '700px', margin: '0 auto', padding: '14px 24px' }}>
+            <h1 style={{ fontSize: '14px', fontWeight: 600, color: 'rgba(255,255,255,0.85)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
               {sessionTitle}
             </h1>
-            <p className="text-[12px] text-white/30 mt-0.5">
+            <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.2)', margin: '2px 0 0 0' }}>
               {messages.length} {messages.length === 1 ? 'message' : 'messages'}
             </p>
           </div>
@@ -212,28 +217,31 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
             </div>
           </div>
         ) : (
-          <div className="max-w-[700px] mx-auto px-6 pt-6 pb-4">
+          <div style={{ maxWidth: '700px', margin: '0 auto', padding: '20px 24px 16px' }}>
             {messages.map((msg, idx) => (
-              <div key={idx} className={idx > 0 ? 'mt-6 pt-6 border-t border-white/[0.04]' : ''}>
+              <div key={idx} style={{ marginTop: idx > 0 ? '20px' : '0' }}>
                 {msg.role === 'user' ? (
-                  // User message - bubble on the right
                   <div className="flex justify-end">
-                    <div className="max-w-[85%]">
-                      <div className="flex items-center justify-end gap-2 mb-1.5">
-                        <span className="text-[11px] font-semibold text-white/40 tracking-wide">You</span>
+                    <div style={{ maxWidth: '80%' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.03em' }}>You</span>
                       </div>
-                      <div className="bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 border border-emerald-500/30 rounded-[18px] rounded-tr-sm px-4 py-3">
-                        <div className="text-[14px] leading-[1.75] whitespace-pre-wrap text-white/90">
+                      <div style={{
+                        background: 'linear-gradient(135deg, rgba(16,185,129,0.12) 0%, rgba(16,185,129,0.08) 100%)',
+                        border: '1px solid rgba(16,185,129,0.15)',
+                        borderRadius: '16px 4px 16px 16px',
+                        padding: '12px 16px',
+                      }}>
+                        <div style={{ fontSize: '14px', lineHeight: '1.7', whiteSpace: 'pre-wrap', color: 'rgba(255,255,255,0.88)' }}>
                           {msg.content}
                         </div>
                       </div>
                     </div>
                   </div>
                 ) : (
-                  // ELSA message - full width on the left
                   <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-[11px] font-semibold text-emerald-400 tracking-wide">ELSA</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#10b981', letterSpacing: '0.03em' }}>ELSA</span>
                     </div>
                     <div className="space-y-4">
                       {(() => {
@@ -282,18 +290,12 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
             ))}
 
             {isLoading && (
-              <div className={messages.length > 0 ? 'mt-6 pt-6 border-t border-white/[0.04]' : ''}>
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[11px] font-semibold text-emerald-400 tracking-wide">ELSA</span>
+              <div style={{ marginTop: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 600, color: '#10b981', letterSpacing: '0.03em' }}>ELSA</span>
                   <div className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
                 </div>
-                <div>
-                  <LoadingSkeleton
-                    lines={3}
-                    widths={['85%', '65%', '75%']}
-                    className="mb-4"
-                  />
-                </div>
+                <LoadingSkeleton lines={3} widths={['85%', '65%', '75%']} className="mb-4" />
               </div>
             )}
 
@@ -302,9 +304,12 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
         )}
       </div>
 
+      {/* Bottom input area */}
       {messages.length > 0 && (
-        <div className="px-6 pb-5 pt-2">
-          <div className="max-w-[640px] mx-auto">
+        <div style={{ padding: '8px 24px 20px', background: 'linear-gradient(0deg, #090909 60%, transparent)', position: 'relative' }}>
+          {/* Fade edge */}
+          <div style={{ position: 'absolute', top: '-24px', left: 0, right: 0, height: '24px', background: 'linear-gradient(0deg, #090909, transparent)', pointerEvents: 'none' }} />
+          <div style={{ maxWidth: '640px', margin: '0 auto' }}>
             <form onSubmit={handleSubmit}>
               {inputBox("Ask a follow-up...")}
             </form>
