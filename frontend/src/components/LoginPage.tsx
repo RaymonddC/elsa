@@ -7,7 +7,7 @@ export default function LoginPage() {
 
   return (
     <div className="h-screen w-screen bg-[#090909] flex items-center justify-center animate-[fadeIn_0.6s_ease-out]">
-      <div className="text-center">
+      <div className="flex flex-col items-center">
         {/* Logo + Title */}
         <div className="flex items-center justify-center animate-[slideDown_0.5s_ease-out]" style={{ gap: '10px', marginBottom: '6px' }}>
           <img src="/elsa-logo.PNG" alt="" style={{ width: '36px', height: '36px' }} className="object-contain" />
@@ -20,17 +20,17 @@ export default function LoginPage() {
 
         {/* Feature cards */}
         <div className="flex justify-center animate-[slideUp_0.7s_ease-out]" style={{ gap: '14px', marginBottom: '28px' }}>
-          <div className="flex flex-col items-center rounded-lg bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm" style={{ width: '110px', padding: '14px 10px 12px', gap: '8px' }}>
+          <div className="flex flex-col items-center rounded-lg bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm" style={{ width: '110px', padding: '14px 10px 12px', gap: '4px' }}>
             <Scan className="text-[#10b981]" style={{ width: '14px', height: '14px' }} strokeWidth={1.5} />
             <p className="text-white/50 font-medium" style={{ fontSize: '10px' }}>Deep Analysis</p>
             <p className="text-white/20 leading-relaxed" style={{ fontSize: '8px' }}>Transaction history & patterns</p>
           </div>
-          <div className="flex flex-col items-center rounded-lg bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm" style={{ width: '110px', padding: '14px 10px 12px', gap: '8px' }}>
+          <div className="flex flex-col items-center rounded-lg bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm" style={{ width: '110px', padding: '14px 10px 12px', gap: '4px' }}>
             <TrendingUp className="text-[#14b8a6]" style={{ width: '14px', height: '14px' }} strokeWidth={1.5} />
             <p className="text-white/50 font-medium" style={{ fontSize: '10px' }}>Visual Charts</p>
             <p className="text-white/20 leading-relaxed" style={{ fontSize: '8px' }}>Interactive data visualization</p>
           </div>
-          <div className="flex flex-col items-center rounded-lg bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm" style={{ width: '110px', padding: '14px 10px 12px', gap: '8px' }}>
+          <div className="flex flex-col items-center rounded-lg bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm" style={{ width: '110px', padding: '14px 10px 12px', gap: '4px' }}>
             <Eye className="text-[#0ea5e9]" style={{ width: '14px', height: '14px' }} strokeWidth={1.5} />
             <p className="text-white/50 font-medium" style={{ fontSize: '10px' }}>Anomaly Detection</p>
             <p className="text-white/20 leading-relaxed" style={{ fontSize: '8px' }}>Flag suspicious activity</p>
