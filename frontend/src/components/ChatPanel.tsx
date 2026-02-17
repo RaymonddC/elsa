@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Bitcoin } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChatMessage } from '../types/agent';
 import TransactionChart from './TransactionChart';
 import WalletDashboardCard from './WalletDashboardCard';
 import { useToast } from '../hooks/useToast';
-import { validateWallet, detectChain, type ChainType } from '../utils/walletValidation';
+import { validateWallet } from '../utils/walletValidation';
 import LoadingSkeleton from './ui/LoadingSkeleton';
 
 interface ChatPanelProps {
@@ -72,12 +72,28 @@ function extractWalletStats(msg: ChatMessage) {
   };
 }
 
+const placeholderHints = [
+  'Paste a wallet address...',
+  'Try a Bitcoin wallet...',
+  'Analyze an Ethereum wallet...',
+  'Detect anomalies in any wallet...',
+  'Check transaction history...',
+];
+
 export default function ChatPanel({ messages, onSendMessage, isLoading, sessionTitle }: ChatPanelProps) {
   const [input, setInput] = useState('');
-  const [detectedChain, setDetectedChain] = useState<ChainType | null>(null);
+  const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { showToast } = useToast();
+
+  useEffect(() => {
+    if (messages.length > 0) return;
+    const interval = setInterval(() => {
+      setPlaceholderIdx((prev) => (prev + 1) % placeholderHints.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [messages.length]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -85,15 +101,10 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
 
   useEffect(() => {
     if (textareaRef.current) {
-      textareaRef.current.style.height = '48px';
+      textareaRef.current.style.height = 'auto';
       const scrollH = textareaRef.current.scrollHeight;
-      if (scrollH > 48) {
-        textareaRef.current.style.height = Math.min(scrollH, 200) + 'px';
-      }
+      textareaRef.current.style.height = Math.min(scrollH, 200) + 'px';
     }
-
-    // Detect chain as user types
-    setDetectedChain(detectChain(input));
   }, [input]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -113,7 +124,6 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
 
     onSendMessage(input.trim());
     setInput('');
-    setDetectedChain(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -124,7 +134,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
   };
 
   const inputBox = (placeholder: string) => (
-    <div className="flex items-end rounded-[20px] bg-[#141414] transition-all duration-300 focus-within:bg-[#181818] focus-within:ring-1 focus-within:ring-white/[0.06]">
+    <div className="flex items-center transition-all duration-300 focus-within:border-white/[0.12]" style={{ borderRadius: '16px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', padding: '4px 4px 4px 0', minHeight: '44px' }}>
       <textarea
         ref={textareaRef}
         value={input}
@@ -133,14 +143,16 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
         placeholder={placeholder}
         disabled={isLoading}
         rows={1}
-        className="flex-1 resize-none bg-transparent text-[14px] text-white/90 placeholder-white/20 pl-5 pr-2 py-3.5 focus:outline-none disabled:opacity-40 min-h-[48px] max-h-[200px]"
+        className="flex-1 resize-none bg-transparent placeholder-white/25 disabled:opacity-40"
+        style={{ fontSize: '14px', padding: '0px 8px 0px 16px', lineHeight: '36px', maxHeight: '200px', border: 'none', outline: 'none', color: 'rgba(255,255,255,0.95)' }}
       />
       <button
         type="submit"
         disabled={isLoading || !input.trim()}
-        className="m-1.5 p-2.5 rounded-[14px] bg-white/90 hover:bg-white disabled:opacity-10 transition-all duration-200 flex-shrink-0"
+        className="flex-shrink-0 flex items-center justify-center border-none transition-all duration-200 disabled:opacity-10"
+        style={{ width: '36px', height: '36px', borderRadius: '12px', backgroundColor: '#10b981', cursor: isLoading || !input.trim() ? 'default' : 'pointer' }}
       >
-        <ArrowUp className="w-4 h-4 text-[#090909]" />
+        <ArrowUp style={{ width: '16px', height: '16px' }} className="text-[#090909]" />
       </button>
     </div>
   );
@@ -163,79 +175,40 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
 
       <div className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center px-6 pb-20">
+          <div className="h-full flex flex-col items-center justify-center px-6 pb-20 animate-[fadeIn_0.5s_ease-out]">
             {/* Logo */}
-            <div className="mb-6 relative">
+            <div className="relative animate-[scaleIn_0.5s_ease-out]" style={{ marginBottom: '0px', animation: 'scaleIn 0.5s ease-out, float 4s ease-in-out 1s infinite' }}>
               <div className="absolute inset-0 bg-gradient-to-r from-primary via-accent to-primary bg-[length:200%_100%] animate-pulse blur-2xl opacity-20"></div>
-              <img src="/elsa-logo.PNG" alt="ELSA" style={{ width: '64px', height: '64px' }} className="relative object-contain" />
+              <img src="/elsa-logo.PNG" alt="ELSA" className="relative object-contain" style={{ width: '64px', height: '64px' }} />
             </div>
-            <h1 className="text-[36px] md:text-[42px] font-display font-semibold text-white/90 mb-3 tracking-tight text-center">
-              Analyze Crypto Wallets
-              <br />
-              <span className="text-primary">with AI Intelligence</span>
-            </h1>
-            <p className="text-[15px] text-white/40 mb-10 text-center max-w-md">
-              Get instant insights into any Bitcoin or Ethereum wallet in seconds
+            <h1 style={{ fontFamily: 'Orbitron, sans-serif', fontSize: '22px', fontWeight: 600, marginTop: '0px', marginBottom: '8px', color: 'rgba(255,255,255,0.9)', letterSpacing: '-0.02em', animation: 'slideUp 0.5s ease-out 0.1s both' }}>ELSA</h1>
+            <p className="text-white/30 text-center" style={{ fontSize: '14px', marginBottom: '16px', animation: 'slideUp 0.5s ease-out 0.2s both' }}>
+              Analyze any crypto wallet with AI-powered insights
             </p>
 
-            {/* Smart Input */}
-            <div className="w-full max-w-[580px] mb-10">
-              <form onSubmit={handleSubmit}>
-                <div className={`
-                  flex items-end rounded-[20px] bg-white/[0.04] border border-white/[0.08] transition-all duration-300
-                  focus-within:bg-white/[0.06] focus-within:border-white/[0.12] focus-within:ring-2
-                  ${detectedChain === 'bitcoin' ? 'focus-within:ring-primary/30 focus-within:border-primary/30' : ''}
-                  ${detectedChain === 'ethereum' ? 'focus-within:ring-info/30 focus-within:border-info/30' : ''}
-                  ${!detectedChain ? 'focus-within:ring-white/[0.06]' : ''}
-                `}>
-                  {detectedChain && (
-                    <div className="pl-4 py-3.5 flex items-center">
-                      {detectedChain === 'bitcoin' ? (
-                        <Bitcoin className="w-5 h-5 text-primary" strokeWidth={2} />
-                      ) : (
-                        <span className="text-info font-mono text-sm font-semibold">ETH</span>
-                      )}
-                    </div>
-                  )}
-                  <textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Paste a wallet address..."
-                    disabled={isLoading}
-                    rows={1}
-                    className={`
-                      flex-1 resize-none bg-transparent text-[15px] text-white/95 placeholder-white/40
-                      ${detectedChain ? 'pl-2' : 'pl-5'} pr-2 py-3.5
-                      focus:outline-none disabled:opacity-40 min-h-[52px] max-h-[200px]
-                    `}
-                  />
-                  <button
-                    type="submit"
-                    disabled={isLoading || !input.trim()}
-                    className="m-1.5 p-3 rounded-[16px] bg-gradient-to-r from-primary to-primary-light hover:shadow-glow-green disabled:opacity-10 disabled:from-white/10 disabled:to-white/10 transition-all duration-200 flex-shrink-0"
-                  >
-                    <ArrowUp className="w-5 h-5 text-[#090909]" strokeWidth={2.5} />
-                  </button>
-                </div>
-              </form>
-            </div>
-
             {/* Example Wallets */}
-            <div className="text-center">
-              <p className="text-xs text-white/30 mb-3 uppercase tracking-wider font-medium">Try these examples</p>
-              <div className="flex gap-2 flex-wrap justify-center">
+            <div className="text-center" style={{ marginBottom: '24px', animation: 'slideUp 0.5s ease-out 0.3s both' }}>
+              <div className="flex flex-wrap justify-center" style={{ gap: '8px' }}>
                 {suggestions.map((item, idx) => (
-                  <button
+                  <span
                     key={idx}
                     onClick={() => onSendMessage(item.query)}
-                    className="px-4 py-2 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] hover:border-white/[0.1] text-[13px] text-white/50 hover:text-white/80 transition-all duration-200"
+                    className="cursor-pointer transition-all duration-200"
+                    style={{ padding: '8px 16px', borderRadius: '20px', backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', fontSize: '13px', color: 'rgba(255,255,255,0.4)', animation: `slideUp 0.4s ease-out ${0.35 + idx * 0.08}s both` }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)'; e.currentTarget.style.transform = 'translateY(0)'; }}
                   >
                     {item.label}
-                  </button>
+                  </span>
                 ))}
               </div>
+            </div>
+
+            {/* Smart Input */}
+            <div className="w-full max-w-[580px]" style={{ animation: 'slideUp 0.6s ease-out 0.5s both' }}>
+              <form onSubmit={handleSubmit}>
+                {inputBox(placeholderHints[placeholderIdx])}
+              </form>
             </div>
           </div>
         ) : (

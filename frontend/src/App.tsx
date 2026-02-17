@@ -180,22 +180,24 @@ function App() {
       <div className="flex-1 flex flex-col min-w-0 relative">
         {/* Hamburger Menu (mobile only) */}
         {!sidebarOpen && (
-          <button
+          <span
             onClick={() => setSidebarOpen(true)}
-            className="absolute top-4 left-4 z-10 p-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] text-white/60 hover:text-white/90 transition-all duration-200 md:hidden"
+            className="absolute z-10 text-white/20 hover:text-white/50 hover:scale-110 cursor-pointer transition-all duration-200 md:hidden"
+            style={{ top: '18px', left: '18px' }}
           >
-            <PanelLeft className="w-5 h-5" strokeWidth={1.5} />
-          </button>
+            <PanelLeft style={{ width: '22px', height: '22px' }} strokeWidth={1.5} />
+          </span>
         )}
 
         {/* Desktop toggle (always visible when closed) */}
         {!sidebarOpen && (
-          <button
+          <span
             onClick={() => setSidebarOpen(true)}
-            className="hidden md:block absolute top-4 left-4 z-10 p-1 text-white/20 hover:text-white/50 transition-all duration-200 opacity-0 hover:opacity-100"
+            className="hidden md:block absolute z-10 text-white/20 hover:text-white/50 hover:scale-110 cursor-pointer transition-all duration-200 opacity-0 hover:opacity-100"
+            style={{ top: '18px', left: '18px' }}
           >
-            <PanelLeft className="w-4 h-4" strokeWidth={1.5} />
-          </button>
+            <PanelLeft style={{ width: '20px', height: '20px' }} strokeWidth={1.5} />
+          </span>
         )}
 
         <ChatPanel
