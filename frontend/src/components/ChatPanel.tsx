@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp } from 'lucide-react';
+import { ArrowUp, AlertCircle, RotateCcw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChatMessage } from '../types/agent';
@@ -8,7 +8,7 @@ import WalletDashboardCard from './WalletDashboardCard';
 import type { WalletSummaryData } from './WalletDashboardCard';
 import { useToast } from '../hooks/useToast';
 import { validateWallet } from '../utils/walletValidation';
-import LoadingSkeleton from './ui/LoadingSkeleton';
+
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -340,6 +340,60 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {(() => {
+                        // Check if this is an error message
+                        const isError = msg.content.startsWith('Error:') || msg.content.startsWith('error:') ||
+                          (msg.agentResponse && !msg.agentResponse.success);
+                        if (isError) {
+                          const errorText = msg.agentResponse?.error || msg.content.replace(/^Error:\s*/i, '');
+                          // Find the user message to enable retry
+                          const prevUserMsg = messages.slice(0, idx).reverse().find(m => m.role === 'user');
+                          return (
+                            <div style={{
+                              borderRadius: '14px',
+                              backgroundColor: 'rgba(239,68,68,0.04)',
+                              border: '1px solid rgba(239,68,68,0.1)',
+                              padding: '16px 18px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '12px',
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                                <AlertCircle style={{ width: '16px', height: '16px', color: 'rgba(239,68,68,0.6)', flexShrink: 0, marginTop: '1px' }} strokeWidth={2} />
+                                <div style={{ flex: 1 }}>
+                                  <p style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(239,68,68,0.7)', margin: '0 0 4px 0' }}>Analysis Failed</p>
+                                  <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', margin: 0, lineHeight: '1.5' }}>{errorText}</p>
+                                </div>
+                              </div>
+                              {prevUserMsg && (
+                                <div style={{ display: 'flex', gap: '8px', marginLeft: '26px' }}>
+                                  <span
+                                    onClick={() => onSendMessage(prevUserMsg.content)}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '5px',
+                                      padding: '5px 12px',
+                                      borderRadius: '8px',
+                                      fontSize: '11px',
+                                      fontWeight: 500,
+                                      color: 'rgba(255,255,255,0.5)',
+                                      backgroundColor: 'rgba(255,255,255,0.04)',
+                                      border: '1px solid rgba(255,255,255,0.06)',
+                                      cursor: 'pointer',
+                                      transition: 'all 0.15s ease',
+                                    }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; }}
+                                  >
+                                    <RotateCcw style={{ width: '11px', height: '11px' }} strokeWidth={2} />
+                                    Retry
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+
                         const addr = extractWalletAddress(msg);
                         const stats = extractWalletStats(msg);
                         const summary = extractWalletSummary(msg);
@@ -347,44 +401,111 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
                         const sanitize = (text: string) => text.replace(/~/g, '\\~');
                         const hasChart = addr && msg.content.includes(chartMarker);
 
+                        // Collect all full hashes from tool results to resolve truncated ones
+                        const fullHashes: string[] = [];
+                        const agent = msg.agentResponse || (msg as any).agent_response;
+                        if (agent?.reasoning_steps) {
+                          for (const step of agent.reasoning_steps) {
+                            const raw = JSON.stringify(step.tool_result?.result || '');
+                            const matches = raw.match(/0x[a-fA-F0-9]{40,66}/g);
+                            if (matches) fullHashes.push(...matches);
+                            // Also BTC tx hashes (64 hex chars)
+                            const btcMatches = raw.match(/\b[a-fA-F0-9]{64}\b/g);
+                            if (btcMatches) fullHashes.push(...btcMatches);
+                          }
+                        }
+                        const uniqueHashes = [...new Set(fullHashes)];
+
+                        // Expand truncated hashes (e.g. 0x4b20fcce…) to full hash
+                        const expandHashes = (text: string): string => {
+                          return text.replace(/\b(0x[a-fA-F0-9]{6,})[…\.]{1,3}\b/g, (match, prefix) => {
+                            const full = uniqueHashes.find(h => h.toLowerCase().startsWith(prefix.toLowerCase()));
+                            return full ? `\`${full}\`` : match;
+                          }).replace(/\b([a-fA-F0-9]{8,})[…\.]{1,3}\b/g, (match, prefix) => {
+                            const full = uniqueHashes.find(h => h.toLowerCase().startsWith(prefix.toLowerCase()));
+                            return full ? `\`${full}\`` : match;
+                          });
+                        };
+
                         const renderMarkdown = (text: string) => (
                           <div className="prose-elsa">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {sanitize(text.trim())}
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                a: ({ href, children }) => {
+                                  const h = href || '';
+                                  const isLocalHash = h.startsWith('/') || h.startsWith('http://localhost') || /^0x[a-fA-F0-9]{40,}/.test(h) || /^[a-fA-F0-9]{64}$/.test(h);
+                                  if (isLocalHash) {
+                                    const fullHash = h.replace(/^https?:\/\/localhost[^/]*\//, '').replace(/^\//, '');
+                                    return (
+                                      <code
+                                        style={{ cursor: 'pointer', userSelect: 'all' }}
+                                        title="Click to copy"
+                                        onClick={() => { navigator.clipboard.writeText(fullHash); }}
+                                      >
+                                        {children}
+                                      </code>
+                                    );
+                                  }
+                                  return <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>;
+                                },
+                                code: ({ children, className }) => {
+                                  const text = String(children).trim();
+                                  const isHash = /^(0x)?[a-fA-F0-9]{40,66}$/.test(text);
+                                  if (isHash && !className) {
+                                    return (
+                                      <code
+                                        style={{ cursor: 'pointer', userSelect: 'all' }}
+                                        title="Click to copy"
+                                        onClick={() => { navigator.clipboard.writeText(text); }}
+                                      >
+                                        {text.length > 16 ? `${text.slice(0, 8)}…${text.slice(-6)}` : text}
+                                      </code>
+                                    );
+                                  }
+                                  return <code className={className}>{children}</code>;
+                                },
+                              }}
+                            >
+                              {sanitize(expandHashes(text.trim()))}
                             </ReactMarkdown>
                           </div>
                         );
 
-                        // Strip token activity section from markdown when shown in card
-                        const stripTokenSection = (text: string) => {
+                        // Strip sections from markdown that are already shown in the card UI
+                        const stripRedundantSections = (text: string) => {
                           return text
+                            // Strip "Wallet Summary" — address, balance, received/sent, dates already in card
+                            .replace(/#{1,4}\s*Wallet\s*Summary[\s\S]*?(?=\n#{1,4}\s|\n\[CHART\]|$)/i, '')
+                            // Strip "Token Activity" — shown in TokenActivity component
                             .replace(/#{1,4}\s*Token\s*Activity[\s\S]*?(?=\n#{1,4}\s|\n\[CHART\]|$)/i, '')
                             .replace(/\*{0,2}Token\s*Activity\s*\(?\d*\)?\*{0,2}\s*\n([-•*]\s+.+\n?)*/gi, '')
+                            // Clean up leftover empty lines
+                            .replace(/\n{3,}/g, '\n\n')
                             .trim();
                         };
 
                         if (addr) {
-                          const hasTokens = summary?.tokenSummary && summary.tokenSummary.length > 0;
                           const chartNode = <TransactionChart address={addr} />;
 
                           if (hasChart) {
                             const [before, after] = msg.content.split(chartMarker);
-                            const cleanBefore = hasTokens ? stripTokenSection(before) : before;
-                            const cleanAfter = after.trim() ? (hasTokens ? stripTokenSection(after) : after) : '';
+                            const cleanBefore = stripRedundantSections(before);
+                            const cleanAfter = after.trim() ? stripRedundantSections(after) : '';
                             return (
                               <WalletDashboardCard address={addr} stats={stats} summary={summary} chart={chartNode}>
                                 <>
-                                  {renderMarkdown(cleanBefore)}
+                                  {cleanBefore && renderMarkdown(cleanBefore)}
                                   {cleanAfter && renderMarkdown(cleanAfter)}
                                 </>
                               </WalletDashboardCard>
                             );
                           }
 
-                          const cleanContent = hasTokens ? stripTokenSection(msg.content) : msg.content;
+                          const cleanContent = stripRedundantSections(msg.content);
                           return (
                             <WalletDashboardCard address={addr} stats={stats} summary={summary} chart={chartNode}>
-                              {renderMarkdown(cleanContent)}
+                              {cleanContent && renderMarkdown(cleanContent)}
                             </WalletDashboardCard>
                           );
                         }
@@ -398,12 +519,36 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
             ))}
 
             {isLoading && (
-              <div style={{ marginTop: '20px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+              <div style={{ marginTop: '20px', animation: 'fadeIn 0.3s ease-out' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
                   <span style={{ fontSize: '11px', fontWeight: 600, color: '#10b981', letterSpacing: '0.03em' }}>ELSA</span>
-                  <div className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
                 </div>
-                <LoadingSkeleton lines={3} widths={['85%', '65%', '75%']} className="mb-4" />
+                <div style={{
+                  borderRadius: '14px',
+                  backgroundColor: 'rgba(255,255,255,0.02)',
+                  border: '1px solid rgba(255,255,255,0.05)',
+                  padding: '16px 18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                }}>
+                  {/* Animated dots */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {[0, 1, 2].map((i) => (
+                      <div
+                        key={i}
+                        style={{
+                          width: '6px',
+                          height: '6px',
+                          borderRadius: '50%',
+                          backgroundColor: '#10b981',
+                          animation: `elsa-dot 1.4s ease-in-out ${i * 0.2}s infinite`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.3)', fontWeight: 500 }}>Analyzing wallet...</span>
+                </div>
               </div>
             )}
 

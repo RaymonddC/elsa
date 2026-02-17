@@ -8,39 +8,78 @@ const TOAST_ICONS = {
   info: Info,
 };
 
-const TOAST_COLORS = {
-  success: 'text-[#10b981] border-[#10b981]/30 bg-[#10b981]/10',
-  error: 'text-[#ef4444] border-[#ef4444]/30 bg-[#ef4444]/10',
-  warning: 'text-[#f59e0b] border-[#f59e0b]/30 bg-[#f59e0b]/10',
-  info: 'text-[#3b82f6] border-[#3b82f6]/30 bg-[#3b82f6]/10',
+const TOAST_STYLES: Record<string, { icon: string; bg: string; border: string }> = {
+  success: {
+    icon: '#10b981',
+    bg: 'rgba(16,185,129,0.06)',
+    border: 'rgba(16,185,129,0.12)',
+  },
+  error: {
+    icon: '#ef4444',
+    bg: 'rgba(239,68,68,0.06)',
+    border: 'rgba(239,68,68,0.12)',
+  },
+  warning: {
+    icon: '#f59e0b',
+    bg: 'rgba(245,158,11,0.06)',
+    border: 'rgba(245,158,11,0.12)',
+  },
+  info: {
+    icon: '#3b82f6',
+    bg: 'rgba(59,130,246,0.06)',
+    border: 'rgba(59,130,246,0.12)',
+  },
 };
 
 function ToastItem({ toast }: { toast: ToastType }) {
   const { dismissToast } = useToast();
   const Icon = TOAST_ICONS[toast.type];
+  const colors = TOAST_STYLES[toast.type];
 
   return (
     <div
-      className={`
-        flex items-start gap-3 p-4 rounded-2xl backdrop-blur-xl border-2
-        shadow-2xl min-w-[360px] max-w-[480px]
-        animate-in slide-in-from-top duration-300
-        ${TOAST_COLORS[toast.type]}
-      `}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '10px 14px',
+        borderRadius: '12px',
+        backgroundColor: colors.bg,
+        border: `1px solid ${colors.border}`,
+        backdropFilter: 'blur(16px)',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+        maxWidth: '360px',
+        animation: 'slideDown 0.25s ease-out',
+      }}
     >
-      <Icon className="w-6 h-6 flex-shrink-0 mt-0.5" strokeWidth={2.5} />
+      <Icon style={{ width: '16px', height: '16px', color: colors.icon, flexShrink: 0 }} strokeWidth={2} />
 
-      <p className="flex-1 text-[15px] font-medium text-white/95 leading-relaxed">
+      <p style={{
+        flex: 1,
+        fontSize: '12px',
+        fontWeight: 500,
+        color: 'rgba(255,255,255,0.8)',
+        lineHeight: '1.5',
+        margin: 0,
+      }}>
         {toast.message}
       </p>
 
-      <button
+      <span
         onClick={() => dismissToast(toast.id)}
-        className="flex-shrink-0 p-1.5 rounded-lg hover:bg-white/20 transition-colors duration-200"
-        aria-label="Dismiss"
+        style={{
+          flexShrink: 0,
+          padding: '4px',
+          borderRadius: '6px',
+          cursor: 'pointer',
+          display: 'flex',
+          transition: 'background-color 0.15s',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
       >
-        <X className="w-4 h-4 text-white/70 hover:text-white/90" strokeWidth={2} />
-      </button>
+        <X style={{ width: '12px', height: '12px', color: 'rgba(255,255,255,0.3)' }} strokeWidth={2} />
+      </span>
     </div>
   );
 }
@@ -51,9 +90,18 @@ export default function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-6 right-6 z-50 flex flex-col gap-4 pointer-events-none">
+    <div style={{
+      position: 'fixed',
+      top: '16px',
+      right: '16px',
+      zIndex: 50,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px',
+      pointerEvents: 'none',
+    }}>
       {toasts.slice(-3).map((toast) => (
-        <div key={toast.id} className="pointer-events-auto">
+        <div key={toast.id} style={{ pointerEvents: 'auto' }}>
           <ToastItem toast={toast} />
         </div>
       ))}
