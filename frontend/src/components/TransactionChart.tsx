@@ -34,7 +34,6 @@ interface TransactionChartProps {
 
 const CHART_HEIGHT = 80;
 
-/** Aggregate daily buckets into months, padded 6 months before and after data */
 function aggregateByMonth(days: DayBucket[]): MonthBucket[] {
   const map = new Map<string, MonthBucket>();
 
@@ -57,14 +56,12 @@ function aggregateByMonth(days: DayBucket[]): MonthBucket[] {
     if (day.top_token && !bucket.top_token) bucket.top_token = day.top_token;
   }
 
-  // Find earliest and latest months from data
   const keys = Array.from(map.keys()).sort();
   if (keys.length === 0) return [];
 
   const [firstY, firstM] = keys[0].split('-').map(Number);
   const [lastY, lastM] = keys[keys.length - 1].split('-').map(Number);
 
-  // Only pad 6 months if the span between first and last month is 10 or fewer
   const totalSpan = (lastY - firstY) * 12 + (lastM - firstM) + 1;
   const pad = totalSpan > 10 ? 0 : 6;
 
@@ -83,13 +80,11 @@ function aggregateByMonth(days: DayBucket[]): MonthBucket[] {
   return result;
 }
 
-/** Build an SVG polyline points string */
 function buildLinePoints(months: MonthBucket[], maxTotal: number, width: number): { inPoints: string; outPoints: string } {
   const len = months.length;
   if (len === 0) return { inPoints: '', outPoints: '' };
 
   const stepX = width / Math.max(len - 1, 1);
-
   const inPts: string[] = [];
   const outPts: string[] = [];
 
@@ -104,7 +99,6 @@ function buildLinePoints(months: MonthBucket[], maxTotal: number, width: number)
   return { inPoints: inPts.join(' '), outPoints: outPts.join(' ') };
 }
 
-/** Build an SVG area path (filled region under the line) */
 function buildAreaPath(months: MonthBucket[], field: 'incoming' | 'outgoing', maxTotal: number, width: number): string {
   const len = months.length;
   if (len === 0) return '';
@@ -128,8 +122,8 @@ export default function TransactionChart({ address }: TransactionChartProps) {
   const [chain, setChain] = useState<'bitcoin' | 'ethereum'>('bitcoin');
   const [loading, setLoading] = useState(true);
   const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
-  const [showIn, setShowIn] = useState(true);
-  const [showOut, setShowOut] = useState(true);
+  const [filter, setFilter] = useState<'all' | 'in' | 'out'>('all');
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   useEffect(() => {
     async function fetchActivity() {
@@ -153,13 +147,13 @@ export default function TransactionChart({ address }: TransactionChartProps) {
 
   if (loading) {
     return (
-      <div className="my-4 rounded-xl bg-white/[0.03] border border-white/[0.04] p-4 h-[120px] flex items-center justify-center">
-        <div className="flex items-center gap-1.5">
+      <div style={{ height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="w-1 h-1 rounded-full bg-white/20 animate-pulse"
-              style={{ animationDelay: `${i * 200}ms` }}
+              className="animate-pulse"
+              style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.15)', animationDelay: `${i * 200}ms` }}
             />
           ))}
         </div>
@@ -168,7 +162,6 @@ export default function TransactionChart({ address }: TransactionChartProps) {
   }
 
   const months = aggregateByMonth(activity);
-
   if (months.length === 0) return null;
 
   const maxTotal = Math.max(...months.map((m) => m.total), 1);
@@ -179,114 +172,170 @@ export default function TransactionChart({ address }: TransactionChartProps) {
     return v.toFixed(5);
   };
 
-  // SVG dimensions for line chart
   const svgWidth = 500;
   const { inPoints, outPoints } = buildLinePoints(months, maxTotal, svgWidth);
   const inArea = buildAreaPath(months, 'incoming', maxTotal, svgWidth);
   const outArea = buildAreaPath(months, 'outgoing', maxTotal, svgWidth);
-
-  // Show every Nth label so they don't overlap
   const labelStep = 1;
 
   return (
-    <div className="my-4 rounded-xl bg-white/[0.03] border border-white/[0.04] p-4">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <span className="text-[12px] font-medium text-white/40 tracking-wide">
-            Transaction Activity
-          </span>
-          <span className="text-[11px] text-white/20">{totalTx} txns</span>
+    <div>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '11px', fontWeight: 600, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.03em' }}>Transaction Activity</span>
+          <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.15)' }}>{totalTx} txns</span>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={() => setShowIn(!showIn)} className="flex items-center gap-1.5 transition-opacity duration-150" style={{ opacity: showIn ? 1 : 0.3 }}>
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400/70" />
-            <span className="text-[10px] text-white/30">In</span>
-          </button>
-          <button onClick={() => setShowOut(!showOut)} className="flex items-center gap-1.5 transition-opacity duration-150" style={{ opacity: showOut ? 1 : 0.3 }}>
-            <div className="w-1.5 h-1.5 rounded-full bg-orange-400/70" />
-            <span className="text-[10px] text-white/30">Out</span>
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* In/Out filter */}
+          <span
+            onClick={() => setFilter(filter === 'in' ? 'all' : 'in')}
+            style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', opacity: filter === 'all' || filter === 'in' ? 1 : 0.3, transition: 'opacity 0.15s' }}
+          >
+            <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'rgba(52,211,153,0.7)' }} />
+            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.25)' }}>In</span>
+          </span>
+          <span
+            onClick={() => setFilter(filter === 'out' ? 'all' : 'out')}
+            style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', opacity: filter === 'all' || filter === 'out' ? 1 : 0.3, transition: 'opacity 0.15s' }}
+          >
+            <div style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'rgba(251,146,60,0.7)' }} />
+            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.25)' }}>Out</span>
+          </span>
+
           {/* Chart type toggle */}
-          <div className="flex items-center gap-0.5 ml-2 rounded-md bg-white/[0.04] p-0.5">
-            <button
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: '6px', borderRadius: '6px', backgroundColor: 'rgba(255,255,255,0.03)', padding: '2px' }}>
+            <span
               onClick={() => setChartType('bar')}
-              className={`p-1 rounded transition-colors duration-150 ${
-                chartType === 'bar' ? 'bg-white/[0.1] text-white/60' : 'text-white/20 hover:text-white/40'
-              }`}
+              style={{
+                padding: '4px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                backgroundColor: chartType === 'bar' ? 'rgba(255,255,255,0.08)' : 'transparent',
+                color: chartType === 'bar' ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)',
+                display: 'flex',
+              }}
             >
-              <BarChart3 className="w-3 h-3" strokeWidth={1.5} />
-            </button>
-            <button
+              <BarChart3 style={{ width: '12px', height: '12px' }} strokeWidth={1.5} />
+            </span>
+            <span
               onClick={() => setChartType('line')}
-              className={`p-1 rounded transition-colors duration-150 ${
-                chartType === 'line' ? 'bg-white/[0.1] text-white/60' : 'text-white/20 hover:text-white/40'
-              }`}
+              style={{
+                padding: '4px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                backgroundColor: chartType === 'line' ? 'rgba(255,255,255,0.08)' : 'transparent',
+                color: chartType === 'line' ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.15)',
+                display: 'flex',
+              }}
             >
-              <TrendingUp className="w-3 h-3" strokeWidth={1.5} />
-            </button>
+              <TrendingUp style={{ width: '12px', height: '12px' }} strokeWidth={1.5} />
+            </span>
           </div>
         </div>
       </div>
 
       {chartType === 'bar' ? (
-        /* ── Bar Chart ── */
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)`, gap: '6px', height: `${CHART_HEIGHT}px`, alignItems: 'end' }}>
+          <div
+            style={{ display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)`, gap: '4px', height: `${CHART_HEIGHT}px`, alignItems: 'end' }}
+          >
             {months.map((month, idx) => {
-              const inPx = Math.max(Math.round((month.incoming / maxTotal) * 70), 3);
-              const outPx = Math.max(Math.round((month.outgoing / maxTotal) * 70), 3);
+              const inPx = Math.max(Math.round((month.incoming / maxTotal) * 70), 2);
+              const outPx = Math.max(Math.round((month.outgoing / maxTotal) * 70), 2);
+              const isHovered = hoveredIdx === idx;
 
               return (
-                <div key={idx} className="group relative" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
-                  {/* Tooltip */}
-                  <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center z-10">
-                    <div className="bg-[#1a1a1a] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-[10px] whitespace-nowrap shadow-xl">
-                      <p className="text-white/60 font-medium mb-0.5">{month.label}</p>
-                      <p className="text-emerald-400/80">
-                        {month.incoming} in · {fmt(month.value_in)} {unit}
-                        {month.token_value_in > 0 && <span className="text-emerald-400/50"> + {fmt(month.token_value_in)} {month.top_token || 'tokens'}</span>}
-                      </p>
-                      <p className="text-orange-400/80">
-                        {month.outgoing} out · {fmt(month.value_out)} {unit}
-                        {month.token_value_out > 0 && <span className="text-orange-400/50"> + {fmt(month.token_value_out)} {month.top_token || 'tokens'}</span>}
-                      </p>
-                      <p className="text-white/30 mt-0.5">{month.total} txns · {fmt(month.value_in + month.value_out)} {unit}</p>
-                      {month.total > 0 && month.value_in === 0 && month.value_out === 0 && month.token_value_in === 0 && month.token_value_out === 0 && (
-                        <p className="text-white/20 text-[9px] mt-0.5 italic">0-value txns (spam/dust)</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Stacked bar */}
-                  {showIn && month.incoming > 0 && (
-                    <div
-                      className="group-hover:opacity-90 transition-opacity duration-150"
-                      style={{ height: `${inPx}px`, backgroundColor: 'rgb(52, 211, 153)' }}
-                    />
+                <div
+                  key={idx}
+                  onMouseEnter={() => setHoveredIdx(idx)}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', cursor: 'pointer', gap: '1px' }}
+                >
+                  {(filter === 'all' || filter === 'in') && month.incoming > 0 && (
+                    <div style={{ height: `${inPx}px`, backgroundColor: `rgba(52,211,153,${isHovered ? 1 : 0.45})`, borderRadius: '2px 2px 0 0', transition: 'all 0.15s ease' }} />
                   )}
-                  {showOut && month.outgoing > 0 && (
-                    <div
-                      className="group-hover:opacity-90 transition-opacity duration-150"
-                      style={{ height: `${outPx}px`, backgroundColor: 'rgb(251, 146, 60)' }}
-                    />
+                  {(filter === 'all' || filter === 'out') && month.outgoing > 0 && (
+                    <div style={{ height: `${outPx}px`, backgroundColor: `rgba(251,146,60,${isHovered ? 1 : 0.45})`, borderRadius: (filter === 'all' || filter === 'in') && month.incoming > 0 ? '0' : '2px 2px 0 0', transition: 'all 0.15s ease' }} />
                   )}
                 </div>
               );
             })}
           </div>
-          {/* Month labels for bar chart */}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)`, gap: '6px' }} className="mt-1.5">
+
+          {/* Labels */}
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)`, gap: '4px', marginTop: '6px' }}>
             {months.map((month, idx) => (
-              <div key={idx} className="text-center">
+              <div key={idx} style={{ textAlign: 'center' }}>
                 {idx % labelStep === 0 && (
-                  <span className="text-[9px] text-white/25">{month.label}</span>
+                  <span style={{ fontSize: '9px', color: hoveredIdx === idx ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.18)', transition: 'color 0.15s' }}>{month.label}</span>
                 )}
               </div>
             ))}
           </div>
+
+          {/* Detail panel - persists last hovered bar */}
+          {hoveredIdx !== null && (() => {
+            const m = months[hoveredIdx];
+            const hasValue = m.value_in > 0 || m.value_out > 0 || m.token_value_in > 0 || m.token_value_out > 0;
+            return (
+              <div style={{
+                marginTop: '12px',
+                borderRadius: '10px',
+                backgroundColor: 'rgba(255,255,255,0.02)',
+                border: '1px solid rgba(255,255,255,0.05)',
+                padding: '12px 14px',
+                animation: 'fadeIn 0.15s ease-out',
+              }}>
+                {/* Top row: date + total */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>{m.label}</span>
+                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.2)', fontFamily: "'JetBrains Mono', monospace" }}>{m.total} transactions</span>
+                </div>
+
+                {/* Stats grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  {/* Incoming */}
+                  <div style={{ padding: '8px 10px', borderRadius: '8px', backgroundColor: 'rgba(52,211,153,0.04)', border: '1px solid rgba(52,211,153,0.08)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
+                      <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: 'rgba(52,211,153,0.8)' }} />
+                      <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Incoming</span>
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: 'rgba(52,211,153,0.85)' }}>{m.incoming}</div>
+                    {hasValue && (
+                      <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', marginTop: '2px', fontFamily: "'JetBrains Mono', monospace" }}>
+                        {fmt(m.value_in)} {unit}
+                        {m.token_value_in > 0 && <span style={{ color: 'rgba(52,211,153,0.3)' }}> + {fmt(m.token_value_in)} {m.top_token || 'tok'}</span>}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Outgoing */}
+                  <div style={{ padding: '8px 10px', borderRadius: '8px', backgroundColor: 'rgba(251,146,60,0.04)', border: '1px solid rgba(251,146,60,0.08)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px' }}>
+                      <div style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: 'rgba(251,146,60,0.8)' }} />
+                      <span style={{ fontSize: '10px', fontWeight: 600, color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Outgoing</span>
+                    </div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: 'rgba(251,146,60,0.85)' }}>{m.outgoing}</div>
+                    {hasValue && (
+                      <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', marginTop: '2px', fontFamily: "'JetBrains Mono', monospace" }}>
+                        {fmt(m.value_out)} {unit}
+                        {m.token_value_out > 0 && <span style={{ color: 'rgba(251,146,60,0.3)' }}> + {fmt(m.token_value_out)} {m.top_token || 'tok'}</span>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Spam/dust note */}
+                {m.total > 0 && !hasValue && (
+                  <div style={{ marginTop: '6px', fontSize: '10px', color: 'rgba(255,255,255,0.12)', fontStyle: 'italic' }}>0-value transactions (spam/dust)</div>
+                )}
+              </div>
+            );
+          })()}
         </>
       ) : (
-        /* ── Line Chart ── */
         <>
           <svg
             viewBox={`0 0 ${svgWidth} ${CHART_HEIGHT}`}
@@ -294,11 +343,9 @@ export default function TransactionChart({ address }: TransactionChartProps) {
             className="w-full"
             style={{ height: `${CHART_HEIGHT}px` }}
           >
-            {/* Area fills */}
-            {showIn && <path d={inArea} fill="rgb(52, 211, 153)" opacity="0.15" />}
-            {showOut && <path d={outArea} fill="rgb(251, 146, 60)" opacity="0.12" />}
-            {/* Lines */}
-            {showIn && (
+            {(filter === 'all' || filter === 'in') && <path d={inArea} fill="rgb(52, 211, 153)" opacity="0.15" />}
+            {(filter === 'all' || filter === 'out') && <path d={outArea} fill="rgb(251, 146, 60)" opacity="0.12" />}
+            {(filter === 'all' || filter === 'in') && (
               <polyline
                 points={inPoints}
                 fill="none"
@@ -308,7 +355,7 @@ export default function TransactionChart({ address }: TransactionChartProps) {
                 strokeLinecap="round"
               />
             )}
-            {showOut && (
+            {(filter === 'all' || filter === 'out') && (
               <polyline
                 points={outPoints}
                 fill="none"
@@ -318,7 +365,6 @@ export default function TransactionChart({ address }: TransactionChartProps) {
                 strokeLinecap="round"
               />
             )}
-            {/* Data point dots */}
             {months.map((month, i) => {
               const stepX = svgWidth / Math.max(months.length - 1, 1);
               const x = i * stepX;
@@ -326,18 +372,17 @@ export default function TransactionChart({ address }: TransactionChartProps) {
               const outY = CHART_HEIGHT - (month.outgoing / maxTotal) * (CHART_HEIGHT - 4);
               return (
                 <g key={i}>
-                  {showIn && month.incoming > 0 && <circle cx={x} cy={inY} r="2" fill="rgb(52, 211, 153)" />}
-                  {showOut && month.outgoing > 0 && <circle cx={x} cy={outY} r="2" fill="rgb(251, 146, 60)" />}
+                  {(filter === 'all' || filter === 'in') && month.incoming > 0 && <circle cx={x} cy={inY} r="2" fill="rgb(52, 211, 153)" />}
+                  {(filter === 'all' || filter === 'out') && month.outgoing > 0 && <circle cx={x} cy={outY} r="2" fill="rgb(251, 146, 60)" />}
                 </g>
               );
             })}
           </svg>
-          {/* Month labels for line chart */}
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)` }} className="mt-1.5">
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${months.length}, 1fr)`, marginTop: '6px' }}>
             {months.map((month, idx) => (
-              <div key={idx} className="text-center">
+              <div key={idx} style={{ textAlign: 'center' }}>
                 {idx % labelStep === 0 && (
-                  <span className="text-[9px] text-white/25">{month.label}</span>
+                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.18)' }}>{month.label}</span>
                 )}
               </div>
             ))}

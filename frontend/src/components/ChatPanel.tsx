@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm';
 import type { ChatMessage } from '../types/agent';
 import TransactionChart from './TransactionChart';
 import WalletDashboardCard from './WalletDashboardCard';
+import type { WalletSummaryData } from './WalletDashboardCard';
 import { useToast } from '../hooks/useToast';
 import { validateWallet } from '../utils/walletValidation';
 import LoadingSkeleton from './ui/LoadingSkeleton';
@@ -40,25 +41,119 @@ function extractWalletAddress(msg: ChatMessage): string | null {
   return null;
 }
 
-/** Extract wallet stats from message content and agent response */
+/** Detect risk level from markdown content text */
+function detectRiskFromContent(text: string): 'Low' | 'Medium' | 'High' | undefined {
+  const c = text.toLowerCase();
+  if (c.includes('low risk') || c.includes('risk: low') || c.includes('no significant anomalies') || c.includes('no anomalies') || c.includes('no suspicious')) return 'Low';
+  if (c.includes('medium risk') || c.includes('moderate risk') || c.includes('some anomalies') || c.includes('minor anomalies')) return 'Medium';
+  if (c.includes('high risk') || c.includes('risk: high') || c.includes('suspicious') || c.includes('significant anomalies') || c.includes('flagged')) return 'High';
+  return undefined;
+}
+
+/** Extract wallet stats from agent tool results, falling back to regex on content */
 function extractWalletStats(msg: ChatMessage) {
+  const agent = msg.agentResponse || (msg as any).agent_response;
+
+  // Try to extract from structured tool results first
+  if (agent?.reasoning_steps) {
+    for (const step of agent.reasoning_steps) {
+      const result = step.tool_result?.result as any;
+      if (!result?.summary) continue;
+      const s = result.summary;
+
+      const chain = s.chain || result.chain;
+      const balance = chain === 'ethereum'
+        ? (s.balance_usd ?? s.final_balance_eth)
+        : s.final_balance_btc;
+      const currency = chain === 'ethereum' && s.balance_usd != null ? 'USD' : (chain === 'ethereum' ? 'ETH' : 'BTC');
+
+      // Calculate last activity from last_seen
+      let lastActivity: string | undefined;
+      if (s.last_seen) {
+        const lastDate = new Date(s.last_seen);
+        const now = new Date();
+        const diffMs = now.getTime() - lastDate.getTime();
+        const diffDays = Math.floor(diffMs / 86400000);
+        if (diffDays < 1) lastActivity = 'Today';
+        else if (diffDays === 1) lastActivity = '1 day ago';
+        else if (diffDays < 30) lastActivity = `${diffDays} days ago`;
+        else if (diffDays < 365) lastActivity = `${Math.floor(diffDays / 30)} months ago`;
+        else lastActivity = `${Math.floor(diffDays / 365)} years ago`;
+      }
+
+      // Try to detect risk from anomaly detection results
+      let riskScore: 'Low' | 'Medium' | 'High' | undefined;
+      for (const s2 of agent.reasoning_steps) {
+        if (s2.tool_call?.tool_name === 'detect_anomalies') {
+          const anomalyResult = s2.tool_result?.result as any;
+          // Use anomaly_count directly, or fall back to anomalies array length
+          const count = anomalyResult?.anomaly_count ?? anomalyResult?.anomalies?.length;
+          if (count != null) {
+            if (count === 0) riskScore = 'Low';
+            else if (count <= 3) riskScore = 'Medium';
+            else riskScore = 'High';
+          }
+        }
+      }
+
+      // Fall back to content text for risk
+      if (!riskScore) {
+        riskScore = detectRiskFromContent(msg.content);
+      }
+
+      return {
+        balance: balance != null ? Number(balance) : undefined,
+        transactionCount: s.n_tx != null ? Number(s.n_tx) : undefined,
+        riskScore,
+        lastActivity,
+        currency,
+      };
+    }
+  }
+
+  // Fallback: regex on content
   const content = msg.content.toLowerCase();
 
   const balanceMatch = content.match(/\$[\d,]+\.?\d*/);
   const balance = balanceMatch ? parseFloat(balanceMatch[0].replace(/[$,]/g, '')) : undefined;
 
-  const txMatch = content.match(/(\d+)\s*transactions?/i);
+  const txMatch = content.match(/(\d[\d,]*)\s*transactions?/i);
   const transactionCount = txMatch ? parseInt(txMatch[1].replace(/,/g, '')) : undefined;
 
-  let riskScore: 'Low' | 'Medium' | 'High' | undefined;
-  if (content.includes('low risk') || content.includes('risk: low')) riskScore = 'Low';
-  else if (content.includes('medium risk') || content.includes('moderate risk')) riskScore = 'Medium';
-  else if (content.includes('high risk') || content.includes('risk: high')) riskScore = 'High';
+  const riskScore = detectRiskFromContent(msg.content);
 
-  const timeMatch = content.match(/(\d+)\s*(hour|day|week|month)s?\s*ago/i);
+  const timeMatch = content.match(/(\d+)\s*(hour|day|week|month|year)s?\s*ago/i);
   const lastActivity = timeMatch ? timeMatch[0] : undefined;
 
   return { balance, transactionCount, riskScore, lastActivity };
+}
+
+/** Extract structured wallet summary from agent tool results */
+function extractWalletSummary(msg: ChatMessage): WalletSummaryData | undefined {
+  const agent = msg.agentResponse || (msg as any).agent_response;
+  if (!agent?.reasoning_steps) return undefined;
+
+  for (const step of agent.reasoning_steps) {
+    const result = step.tool_result?.result as any;
+    if (!result?.summary) continue;
+    const s = result.summary;
+    const chain = s.chain || result.chain;
+    const isEth = chain === 'ethereum';
+
+    return {
+      chain,
+      totalReceived: isEth ? s.total_received_eth : s.total_received_btc,
+      totalSent: isEth ? s.total_sent_eth : s.total_sent_btc,
+      totalReceivedUsd: s.total_received_usd,
+      totalSentUsd: s.total_sent_usd,
+      balanceUsd: s.balance_usd,
+      firstSeen: s.first_seen,
+      lastSeen: s.last_seen,
+      tokenSummary: s.token_summary,
+    };
+  }
+
+  return undefined;
 }
 
 const placeholderHints = [
@@ -243,45 +338,58 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
                       <span style={{ fontSize: '11px', fontWeight: 600, color: '#10b981', letterSpacing: '0.03em' }}>ELSA</span>
                     </div>
-                    <div className="space-y-4">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {(() => {
                         const addr = extractWalletAddress(msg);
                         const stats = extractWalletStats(msg);
+                        const summary = extractWalletSummary(msg);
                         const chartMarker = '[CHART]';
                         const sanitize = (text: string) => text.replace(/~/g, '\\~');
                         const hasChart = addr && msg.content.includes(chartMarker);
 
-                        if (hasChart) {
-                          const [before, after] = msg.content.split(chartMarker);
+                        const renderMarkdown = (text: string) => (
+                          <div className="prose-elsa">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {sanitize(text.trim())}
+                            </ReactMarkdown>
+                          </div>
+                        );
+
+                        // Strip token activity section from markdown when shown in card
+                        const stripTokenSection = (text: string) => {
+                          return text
+                            .replace(/#{1,4}\s*Token\s*Activity[\s\S]*?(?=\n#{1,4}\s|\n\[CHART\]|$)/i, '')
+                            .replace(/\*{0,2}Token\s*Activity\s*\(?\d*\)?\*{0,2}\s*\n([-•*]\s+.+\n?)*/gi, '')
+                            .trim();
+                        };
+
+                        if (addr) {
+                          const hasTokens = summary?.tokenSummary && summary.tokenSummary.length > 0;
+                          const chartNode = <TransactionChart address={addr} />;
+
+                          if (hasChart) {
+                            const [before, after] = msg.content.split(chartMarker);
+                            const cleanBefore = hasTokens ? stripTokenSection(before) : before;
+                            const cleanAfter = after.trim() ? (hasTokens ? stripTokenSection(after) : after) : '';
+                            return (
+                              <WalletDashboardCard address={addr} stats={stats} summary={summary} chart={chartNode}>
+                                <>
+                                  {renderMarkdown(cleanBefore)}
+                                  {cleanAfter && renderMarkdown(cleanAfter)}
+                                </>
+                              </WalletDashboardCard>
+                            );
+                          }
+
+                          const cleanContent = hasTokens ? stripTokenSection(msg.content) : msg.content;
                           return (
-                            <>
-                              {addr && <WalletDashboardCard address={addr} stats={stats} />}
-                              <div className="prose-elsa">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                  {sanitize(before.trim())}
-                                </ReactMarkdown>
-                              </div>
-                              <TransactionChart address={addr} />
-                              <div className="prose-elsa">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                  {sanitize(after.trim())}
-                                </ReactMarkdown>
-                              </div>
-                            </>
+                            <WalletDashboardCard address={addr} stats={stats} summary={summary} chart={chartNode}>
+                              {renderMarkdown(cleanContent)}
+                            </WalletDashboardCard>
                           );
                         }
 
-                        return (
-                          <>
-                            {addr && <WalletDashboardCard address={addr} stats={stats} />}
-                            <div className="prose-elsa">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {sanitize(msg.content)}
-                              </ReactMarkdown>
-                            </div>
-                            {addr && <TransactionChart address={addr} />}
-                          </>
-                        );
+                        return renderMarkdown(msg.content);
                       })()}
                     </div>
                   </div>
