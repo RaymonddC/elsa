@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Search, BarChart3, Zap, Bitcoin } from 'lucide-react';
+import { ArrowUp, Bitcoin } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChatMessage } from '../types/agent';
@@ -220,25 +220,6 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, sessionT
                   </button>
                 </div>
               </form>
-            </div>
-
-            {/* Feature Grid - Always Horizontal */}
-            <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-10 w-full max-w-[680px]">
-              <div className="flex flex-col items-center text-center p-4 sm:p-6 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-all duration-200">
-                <Search className="w-7 h-7 sm:w-8 sm:h-8 text-primary/80 mb-2 sm:mb-3" strokeWidth={1.5} />
-                <h3 className="text-xs sm:text-sm font-semibold text-white/80 mb-1">Deep Analysis</h3>
-                <p className="text-[10px] sm:text-xs text-white/40 leading-tight">Transaction history & patterns</p>
-              </div>
-              <div className="flex flex-col items-center text-center p-4 sm:p-6 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-all duration-200">
-                <BarChart3 className="w-7 h-7 sm:w-8 sm:h-8 text-accent/80 mb-2 sm:mb-3" strokeWidth={1.5} />
-                <h3 className="text-xs sm:text-sm font-semibold text-white/80 mb-1">Visual Charts</h3>
-                <p className="text-[10px] sm:text-xs text-white/40 leading-tight">Interactive data visualization</p>
-              </div>
-              <div className="flex flex-col items-center text-center p-4 sm:p-6 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-all duration-200">
-                <Zap className="w-7 h-7 sm:w-8 sm:h-8 text-warning/80 mb-2 sm:mb-3" strokeWidth={1.5} />
-                <h3 className="text-xs sm:text-sm font-semibold text-white/80 mb-1">Real-time Insights</h3>
-                <p className="text-[10px] sm:text-xs text-white/40 leading-tight">AI-powered recommendations</p>
-              </div>
             </div>
 
             {/* Example Wallets */}
