@@ -95,7 +95,7 @@ app.get('/wallet-activity/:address', requireAuth, async (req: AuthRequest, res) 
                   aggs: { sum: { sum: { field: 'token_value' } } },
                 },
                 top_token: {
-                  terms: { field: 'token_symbol', size: 1 },
+                  terms: { field: 'token_symbol.keyword', size: 1 },
                 },
               } : {}),
             },

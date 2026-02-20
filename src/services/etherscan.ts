@@ -192,9 +192,16 @@ export async function fetchEthTokenTransactions(
 export function tokenToDecimal(value: string, decimals: string | number): number {
   const dec = typeof decimals === 'string' ? parseInt(decimals, 10) : decimals;
   if (dec === 0) return Number(value);
-  const valueBigInt = BigInt(value);
-  const result = Number(valueBigInt) / Math.pow(10, dec);
-  return result;
+  try {
+    const valueBigInt = BigInt(value);
+    const result = Number(valueBigInt) / Math.pow(10, dec);
+    // Guard against Infinity/NaN from absurdly large token values (common in scam tokens)
+    if (!isFinite(result) || isNaN(result)) return 0;
+    return result;
+  } catch {
+    // BigInt conversion can fail on malformed values
+    return 0;
+  }
 }
 
 /**

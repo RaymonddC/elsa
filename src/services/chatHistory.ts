@@ -63,17 +63,50 @@ export async function updateSession(sessionId: string, userId: string, messages:
   const session = await getSession(sessionId, userId);
   if (!session) return false;
 
-  await esClient.update({
-    index: CHAT_HISTORY_INDEX,
-    id: sessionId,
-    body: {
-      doc: {
-        messages,
-        updated_at: new Date().toISOString(),
-      },
-    },
-    refresh: 'wait_for',
+  // Sanitize messages to prevent ES mapper conflicts:
+  // Agent responses contain deeply nested objects with varying types,
+  // which causes "mapper cannot be changed" errors. Stringify complex data.
+  const sanitizedMessages = messages.map(msg => {
+    if (msg.agent_response) {
+      return {
+        ...msg,
+        // Store as stringified JSON to avoid dynamic mapping conflicts
+        agent_response: typeof msg.agent_response === 'string'
+          ? msg.agent_response
+          : JSON.stringify(msg.agent_response),
+      };
+    }
+    return msg;
   });
+
+  try {
+    await esClient.update({
+      index: CHAT_HISTORY_INDEX,
+      id: sessionId,
+      body: {
+        doc: {
+          messages: sanitizedMessages,
+          updated_at: new Date().toISOString(),
+        },
+      },
+      refresh: 'wait_for',
+    });
+  } catch (error: any) {
+    // If mapper conflict persists, try deleting and re-indexing the whole doc
+    if (error?.meta?.statusCode === 400 && error?.message?.includes('mapper')) {
+      console.warn('Mapper conflict detected, re-indexing chat document...');
+      const fullSession = { ...session, messages: sanitizedMessages, updated_at: new Date().toISOString() };
+      delete (fullSession as any).id;
+      await esClient.index({
+        index: CHAT_HISTORY_INDEX,
+        id: sessionId,
+        body: fullSession,
+        refresh: 'wait_for',
+      });
+    } else {
+      throw error;
+    }
+  }
 
   return true;
 }

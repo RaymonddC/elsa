@@ -1,253 +1,292 @@
 /**
- * Agent Orchestrator - The brain of the crypto wallet analysis agent
+ * Agent Orchestrator - Powered by Elastic Agent Builder
  *
- * Implements a "Glass Box" agent that:
- * 1. Takes a user question about a Bitcoin or Ethereum wallet
- * 2. Calls LLM with available tools (fetch, search, summarize, detect anomalies)
- * 3. Executes tool calls against blockchain.info / Etherscan API + Elasticsearch
- * 4. Logs EVERY step for transparency
- * 5. Returns final answer with complete reasoning trace
+ * Flow:
+ * 1. Extract wallet address from question
+ * 2. Fetch wallet data from blockchain API & cache to Elasticsearch
+ * 3. Elastic Agent Builder queries ES and generates answer
  */
 
-import OpenAI from 'openai';
-import { TOOL_DEFINITIONS, executeTool } from './tools';
-import { AgentResponse, ReasoningStep, ToolCall, ToolResult } from '../types/agent';
+import dotenv from 'dotenv';
+dotenv.config();
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { AgentResponse, ReasoningStep } from '../types/agent';
+import { executeTool } from './tools';
 
-// Dynamic system prompt with current time
-function getSystemPrompt(): string {
-  const now = new Date();
+const ELASTIC_AGENT_ID = process.env.ELASTIC_AGENT_ID || 'elsa-blockchain-agent';
+const ELASTIC_URL = process.env.ELASTICSEARCH_URL || '';
+const ELASTIC_API_KEY = process.env.ELASTIC_API_KEY || '';
 
-  return `You are an expert blockchain analyst supporting both Bitcoin and Ethereum. Your job is to help users investigate wallet addresses — fetching transaction history, identifying patterns, and detecting suspicious or anomalous activity.
-
-Current time: ${now.toISOString()}
-
-SUPPORTED CHAINS:
-- Bitcoin: addresses start with 1, 3, or bc1 (e.g., 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa)
-- Ethereum: addresses start with 0x and are 42 characters (e.g., 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045)
-
-The chain is auto-detected from the address format. You do not need to specify it.
-
-WORKFLOW — Follow this order for wallet analysis:
-1. Use fetch_wallet_data to pull transactions and cache them in Elasticsearch.
-2. Use get_wallet_summary to retrieve the cached overview (balance, totals, tx count).
-3. Use search_transactions to drill into specific transactions (filter by direction, value range, time range).
-4. Use detect_anomalies to run algorithmic checks for suspicious patterns.
-
-ANALYSIS GUIDELINES:
-- Bitcoin: values in satoshis (1 BTC = 100,000,000 satoshis). Report as BTC.
-- Ethereum: values in wei (1 ETH = 10^18 wei). Report as ETH. Gas prices in Gwei.
-- Cite specific transaction hashes (tx_hash) when discussing individual transactions.
-- Explain anomaly types clearly: what the pattern means and why it could be suspicious.
-- If the wallet has many transactions, fetch in batches and summarize trends.
-
-TOKEN ANALYSIS (Ethereum):
-- The wallet summary includes a token_summary array listing each ERC-20 token the wallet has traded.
-- For each token, you get: symbol, name, contract address, total_in, total_out, tx_count, price_usd, total_in_usd, total_out_usd.
-- The summary also includes eth_price_usd, total_received_usd, total_sent_usd, and balance_usd for native ETH.
-- ALWAYS include a "Token Activity" section in your analysis that lists:
-  - Each token traded (symbol and name)
-  - Volume in/out for each token with USD values when available (e.g., "1,773.79 USDC ($1,773.79 USD)")
-  - If a token has no price_usd data, just show the token amount without USD (e.g., "16,705,243,914 BABYDOGE (price unavailable)")
-  - NEVER write "$X USD" or placeholder text. Either show the real USD value or say "price unavailable".
-  - IMPORTANT: Never use the ~ (tilde) character in your output. It causes formatting issues. Use "approx." instead if needed.
-  - Number of transactions per token
-  - Total USD value across all tokens and ETH combined
-  - Any notable patterns (heavy trading in one token, one-sided flows, etc.)
-- If no tokens were traded, mention that the wallet only transacted in native ETH.
-
-ANOMALY TYPES TO WATCH FOR:
-- Large transactions: statistically unusual amounts (above mean + 2× std deviation)
-- Rapid sequences / mixing: many transactions in short bursts (potential tumbler/bot usage)
-- Round-number transactions: suspiciously exact amounts (1.0, 0.5, 0.1 BTC/ETH)
-- Dormant wallet reactivation: long inactivity followed by sudden activity
-- Fan-out (Bitcoin): single input going to many outputs (distribution pattern)
-- Fan-in (Bitcoin): many inputs consolidating into few outputs (aggregation pattern)
-- Failed transactions (Ethereum): reverted or errored transactions
-- High gas prices (Ethereum): unusually high gas indicating urgency or MEV
-
-OUTPUT FORMAT — Structure your final answer in EXACTLY this order with these markdown headers:
-
-## Wallet Summary
-- Address, chain, balance (with USD), total received/sent (with USD), transaction count, date range of activity.
-- Total Value Transacted: total ETH volume in/out with USD, total token volume per token with USD, and grand total USD across all assets.
-
-[CHART]
-
-## Token Activity
-- List each ERC-20 token traded: symbol, name, volume in/out with USD values, tx count.
-- If no tokens were traded, state "This wallet only transacted in native ETH."
-
-## Anomalies Detected
-- List each anomaly found with severity, description, and example transactions.
-- If no anomalies found, state "No anomalies detected."
-
-## Analysis Summary
-- A brief 2-4 sentence conclusion that ties together all findings.
-- Highlight the most important takeaways: overall wallet behavior, risk level, and any notable patterns.
-- Example: "This wallet appears to be an active DeFi trader with heavy USDC and WETH activity. No high-severity anomalies were detected. The majority of transactions are token swaps with consistent gas usage."
-
-IMPORTANT: You MUST include the literal text "[CHART]" on its own line right after the Wallet Summary section. This is a placeholder that will be replaced with an interactive chart.`;
+function getKibanaUrl(): string {
+    if (process.env.KIBANA_URL) return process.env.KIBANA_URL.replace(/\/$/, '');
+    const derived = ELASTIC_URL.replace('.es.', '.kb.').replace(/:\d+$/, '');
+    console.log(`[Agent Builder] No KIBANA_URL set, derived from ES URL: ${derived}`);
+    return derived;
 }
 
-const MAX_ITERATIONS = 10; // Prevent infinite loops
+function extractWalletAddress(text: string): string | null {
+    const ethMatch = text.match(/0x[a-fA-F0-9]{40}/);
+    if (ethMatch) return ethMatch[0];
+    const btcMatch = text.match(/\b(bc1[a-zA-Z0-9]{39,59}|[13][a-zA-Z0-9]{25,34})\b/);
+    if (btcMatch) return btcMatch[0];
+    return null;
+}
 
-/**
- * Main agent loop with Glass Box transparency
- */
 export type StepEvent = {
-  type: 'thinking' | 'tool_start' | 'tool_done' | 'done' | 'error';
-  step_number: number;
-  message: string;
-  tool_name?: string;
-  execution_time_ms?: number;
+    type: 'thinking' | 'tool_start' | 'tool_done' | 'done' | 'error';
+    step_number: number;
+    message: string;
+    tool_name?: string;
+    execution_time_ms?: number;
 };
 
-export async function analyzeQuestion(
-  question: string,
-  onStep?: (event: StepEvent) => void,
-): Promise<AgentResponse> {
-  const startTime = Date.now();
-  const reasoningSteps: ReasoningStep[] = [];
-  let stepNumber = 0;
+async function sendToElasticAgent(
+    conversationId: string | null,
+    message: string,
+): Promise<{ answer: string; conversationId: string; steps: any[] }> {
+    const kibanaUrl = getKibanaUrl();
+    const endpoint = `${kibanaUrl}/api/agent_builder/converse`;
 
-  try {
-    // Initialize conversation with system prompt and user question
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      { role: 'system', content: getSystemPrompt() },
-      { role: 'user', content: question },
-    ];
+    const body: any = {
+        input: message,
+        agent_id: ELASTIC_AGENT_ID,
+    };
 
-    let iteration = 0;
-    let finalAnswer: string | null = null;
+    if (conversationId) {
+        body.conversation_id = conversationId;
+    }
 
-    // Agent loop: LLM -> Tool Call -> Execute -> LLM -> ...
-    while (iteration < MAX_ITERATIONS && !finalAnswer) {
-      iteration++;
+    if (process.env.ELASTIC_CONNECTOR_ID) {
+        body.connector_id = process.env.ELASTIC_CONNECTOR_ID;
+    }
 
-      console.log(`\n=== Iteration ${iteration} ===`);
+    console.log(`[Agent Builder] POST ${endpoint}`);
+    console.log(`[Agent Builder] agent_id: ${ELASTIC_AGENT_ID}`);
+    console.log(`[Agent Builder] input: ${message.substring(0, 100)}...`);
 
-      onStep?.({ type: 'thinking', step_number: stepNumber + 1, message: 'Thinking...' });
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `ApiKey ${ELASTIC_API_KEY}`,
+            'kbn-xsrf': 'true',
+        },
+        body: JSON.stringify(body),
+    });
 
-      // Call LLM
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4-turbo-preview',
-        messages,
-        tools: TOOL_DEFINITIONS,
-        tool_choice: 'auto',
-      });
-
-      const assistantMessage = response.choices[0].message;
-      console.log('LLM Response:', assistantMessage.content || '[Tool calls]');
-
-      // Add assistant message to conversation
-      messages.push(assistantMessage);
-
-      // Check if LLM wants to call tools
-      if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
-        // Process each tool call
-        for (const toolCall of assistantMessage.tool_calls) {
-          stepNumber++;
-          const toolName = toolCall.function.name;
-          const toolArgs = JSON.parse(toolCall.function.arguments);
-
-          console.log(`\nTool Call: ${toolName}`);
-          console.log('Arguments:', JSON.stringify(toolArgs, null, 2));
-
-          const toolLabel: Record<string, string> = {
-            fetch_wallet_data: 'Fetching wallet data',
-            get_wallet_summary: 'Getting wallet summary',
-            search_transactions: 'Searching transactions',
-            detect_anomalies: 'Detecting anomalies',
-          };
-          onStep?.({ type: 'tool_start', step_number: stepNumber, message: toolLabel[toolName] || `Running ${toolName}`, tool_name: toolName });
-
-          // Log tool call in reasoning steps
-          const toolCallLog: ToolCall = {
-            tool_name: toolName,
-            arguments: toolArgs,
-            timestamp: new Date().toISOString(),
-          };
-
-          // Execute tool
-          const toolResult = await executeTool(toolName, toolArgs);
-
-          console.log(`Tool Result: ${JSON.stringify(toolResult).substring(0, 200)}...`);
-
-          onStep?.({ type: 'tool_done', step_number: stepNumber, message: `${toolLabel[toolName] || toolName} complete`, tool_name: toolName, execution_time_ms: toolResult.execution_time_ms });
-
-          // Log tool result in reasoning steps
-          const toolResultLog: ToolResult = {
-            tool_name: toolName,
-            result: toolResult,
-            elasticsearch_query: toolResult.elasticsearch_query,
-            execution_time_ms: toolResult.execution_time_ms,
-            timestamp: new Date().toISOString(),
-          };
-
-          // Add reasoning step
-          reasoningSteps.push({
-            step_number: stepNumber,
-            thought: assistantMessage.content || `Calling ${toolName} to gather information`,
-            tool_call: toolCallLog,
-            tool_result: toolResultLog,
-            timestamp: new Date().toISOString(),
-          });
-
-          // Send tool result back to LLM
-          messages.push({
-            role: 'tool',
-            tool_call_id: toolCall.id,
-            content: JSON.stringify(toolResult),
-          });
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[Agent Builder] Error ${response.status}: ${errorText}`);
+        if (response.status === 401 || response.status === 403) {
+            throw new Error(`Elastic Agent Builder auth failed (${response.status}). Check ELASTIC_API_KEY has 'read_agent_builder' privilege.`);
         }
-      } else {
-        // No more tool calls - LLM has final answer
-        finalAnswer = assistantMessage.content || 'No answer provided';
-
-        // Add final reasoning step
-        stepNumber++;
-        reasoningSteps.push({
-          step_number: stepNumber,
-          thought: 'Formulating final answer based on gathered data',
-          timestamp: new Date().toISOString(),
-        });
-
-        console.log('\nFinal Answer:', finalAnswer);
-        onStep?.({ type: 'done', step_number: stepNumber, message: 'Analysis complete' });
-      }
+        if (response.status === 404) {
+            throw new Error(`Elastic Agent Builder endpoint not found. Check KIBANA_URL (${kibanaUrl}) and that Agent Builder is enabled.`);
+        }
+        throw new Error(`Elastic Agent API error: ${response.status} - ${errorText}`);
     }
 
-    if (!finalAnswer) {
-      throw new Error('Max iterations reached without final answer');
+    const text = await response.text();
+    console.log(`[Agent Builder] Raw response (first 500 chars): ${text.substring(0, 500)}`);
+
+    let answer = '';
+    let newConversationId = conversationId || '';
+    const steps: any[] = [];
+
+    try {
+        const data = JSON.parse(text);
+
+        if (data.conversation_id) {
+            newConversationId = data.conversation_id;
+        }
+
+        // Parse steps: 'reasoning' and 'tool_call' types
+        if (data.steps && Array.isArray(data.steps)) {
+            for (const s of data.steps) {
+                if (s.type === 'tool_call') {
+                    steps.push({
+                        tool: s.tool_id || s.tool || 'unknown',
+                        input: s.params || s.input || {},
+                        output: s.results || s.output || [],
+                        tool_call_id: s.tool_call_id,
+                    });
+                }
+            }
+        }
+
+        // Official API response format: { response: { message: "..." } }
+        if (data.response && typeof data.response === 'object' && data.response.message) {
+            answer = data.response.message;
+        } else if (data.response && typeof data.response === 'string') {
+            answer = data.response;
+        }
+
+        // Fallbacks
+        if (!answer) {
+            answer = data.output || data.answer || data.message || data.content || '';
+        }
+        if (!answer && data.steps && Array.isArray(data.steps)) {
+            const lastReasoning = [...data.steps].reverse().find((s: any) => s.type === 'reasoning');
+            if (lastReasoning) {
+                answer = lastReasoning.reasoning || lastReasoning.content || '';
+            }
+        }
+
+        console.log(`[Agent Builder] Parsed answer (first 200 chars): ${answer.substring(0, 200)}`);
+        console.log(`[Agent Builder] Parsed ${steps.length} tool call steps`);
+
+    } catch (e) {
+        console.error('[Agent Builder] Failed to parse response:', e);
+        throw new Error('Failed to parse response from Elastic Agent Builder');
     }
 
-    const totalDuration = Date.now() - startTime;
-
-    return {
-      question,
-      final_answer: finalAnswer,
-      reasoning_steps: reasoningSteps,
-      total_duration_ms: totalDuration,
-      success: true,
-    };
-  } catch (error) {
-    const totalDuration = Date.now() - startTime;
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-    console.error('Error in agent orchestrator:', errorMessage);
-
-    return {
-      question,
-      final_answer: '',
-      reasoning_steps: reasoningSteps,
-      total_duration_ms: totalDuration,
-      success: false,
-      error: errorMessage,
-    };
-  }
+    return { answer, conversationId: newConversationId, steps };
 }
 
+export async function analyzeQuestion(
+    question: string,
+    onStep?: (event: StepEvent) => void,
+): Promise<AgentResponse> {
+    const startTime = Date.now();
+    const reasoningSteps: ReasoningStep[] = [];
+    let stepNumber = 0;
+
+    try {
+        onStep?.({ type: 'thinking', step_number: ++stepNumber, message: 'Analyzing request...' });
+
+        // Step 1: Extract wallet address and fetch data to Elasticsearch
+        const walletAddress = extractWalletAddress(question);
+
+        if (walletAddress) {
+            const fetchStart = Date.now();
+            onStep?.({
+                type: 'tool_start',
+                step_number: ++stepNumber,
+                message: 'Fetching wallet data from blockchain...',
+                tool_name: 'fetch_wallet_data',
+            });
+
+            try {
+                const fetchResult = await executeTool('fetch_wallet_data', { address: walletAddress });
+                const fetchTime = Date.now() - fetchStart;
+
+                reasoningSteps.push({
+                    step_number: stepNumber,
+                    thought: `Fetched and cached wallet data for ${walletAddress}`,
+                    tool_call: {
+                        tool_name: 'fetch_wallet_data',
+                        arguments: { address: walletAddress },
+                        timestamp: new Date().toISOString(),
+                    },
+                    tool_result: {
+                        tool_name: 'fetch_wallet_data',
+                        result: fetchResult,
+                        execution_time_ms: fetchTime,
+                        timestamp: new Date().toISOString(),
+                    },
+                    timestamp: new Date().toISOString(),
+                });
+
+                onStep?.({
+                    type: 'tool_done',
+                    step_number: stepNumber,
+                    message: 'Wallet data cached in Elasticsearch',
+                    tool_name: 'fetch_wallet_data',
+                    execution_time_ms: fetchTime,
+                });
+            } catch (fetchError) {
+                console.error('Failed to fetch wallet data:', fetchError);
+                onStep?.({
+                    type: 'tool_done',
+                    step_number: stepNumber,
+                    message: 'Using cached wallet data',
+                    tool_name: 'fetch_wallet_data',
+                });
+            }
+        }
+
+        // Step 2: Send to Elastic Agent Builder for analysis
+        onStep?.({ type: 'thinking', step_number: ++stepNumber, message: 'Elastic Agent analyzing data...' });
+
+        const { answer, steps } = await sendToElasticAgent(null, question);
+
+        // Step 3: Process tool steps from Elastic Agent for Glass Box
+        const toolLabel: Record<string, string> = {
+            'platform.core.search': 'Searching transactions in Elasticsearch',
+            'platform.core.get_document_by_id': 'Retrieving wallet summary',
+            'platform.core.execute_esql': 'Running ES|QL analytics query',
+            'platform.core.generate_esql': 'Generating analytics query',
+            'platform.core.get_index_mapping': 'Getting index structure',
+            'platform.core.list_indices': 'Listing available indices',
+        };
+
+        for (const step of steps) {
+            stepNumber++;
+
+            onStep?.({
+                type: 'tool_start',
+                step_number: stepNumber,
+                message: toolLabel[step.tool] || `Running ${step.tool}`,
+                tool_name: step.tool,
+            });
+
+            reasoningSteps.push({
+                step_number: stepNumber,
+                thought: toolLabel[step.tool] || `Using ${step.tool}`,
+                tool_call: {
+                    tool_name: step.tool,
+                    arguments: step.input,
+                    timestamp: new Date().toISOString(),
+                },
+                tool_result: {
+                    tool_name: step.tool,
+                    result: step.output,
+                    timestamp: new Date().toISOString(),
+                },
+                timestamp: new Date().toISOString(),
+            });
+
+            onStep?.({
+                type: 'tool_done',
+                step_number: stepNumber,
+                message: `${toolLabel[step.tool] || step.tool} complete`,
+                tool_name: step.tool,
+                execution_time_ms: 0,
+            });
+        }
+
+        stepNumber++;
+        reasoningSteps.push({
+            step_number: stepNumber,
+            thought: 'Formulating final answer based on Elasticsearch data',
+            timestamp: new Date().toISOString(),
+        });
+
+        onStep?.({ type: 'done', step_number: stepNumber, message: 'Analysis complete' });
+
+        const totalDuration = Date.now() - startTime;
+
+        return {
+            question,
+            final_answer: answer || 'No answer provided by Elastic Agent',
+            reasoning_steps: reasoningSteps,
+            total_duration_ms: totalDuration,
+            success: true,
+        };
+    } catch (error) {
+        const totalDuration = Date.now() - startTime;
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+        console.error('Error in Elastic Agent orchestrator:', errorMessage);
+        onStep?.({ type: 'error', step_number: stepNumber, message: errorMessage });
+
+        return {
+            question,
+            final_answer: '',
+            reasoning_steps: reasoningSteps,
+            total_duration_ms: totalDuration,
+            success: false,
+            error: errorMessage,
+        };
+    }
+}
