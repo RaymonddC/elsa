@@ -257,7 +257,7 @@ export default function TransactionChart({ address }: TransactionChartProps) {
                     <div style={{ height: `${inPx}px`, backgroundColor: `rgba(52,211,153,${isHovered ? 1 : 0.45})`, borderRadius: '2px 2px 0 0', transition: 'all 0.15s ease' }} />
                   )}
                   {(filter === 'all' || filter === 'out') && month.outgoing > 0 && (
-                    <div style={{ height: `${outPx}px`, backgroundColor: `rgba(251,146,60,${isHovered ? 1 : 0.45})`, borderRadius: (filter === 'all' || filter === 'in') && month.incoming > 0 ? '0' : '2px 2px 0 0', transition: 'all 0.15s ease' }} />
+                    <div style={{ height: `${outPx}px`, backgroundColor: `rgba(251,146,60,${isHovered ? 1 : 0.45})`, borderRadius: filter === 'all' && month.incoming > 0 ? '0' : '2px 2px 0 0', transition: 'all 0.15s ease' }} />
                   )}
                 </div>
               );
