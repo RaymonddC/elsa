@@ -226,7 +226,7 @@ export async function fetchTokenPricesUSD(contractAddresses: string[]): Promise<
     // Fetch ETH price
     const ethRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd');
     if (ethRes.ok) {
-      const ethData = await ethRes.json();
+      const ethData = await ethRes.json() as any;
       if (ethData.ethereum?.usd) {
         prices.set('eth', ethData.ethereum.usd);
       }
