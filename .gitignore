@@ -11,6 +11,7 @@ frontend/build/
 # Environment variables
 .env
 .env.local
+frontend/.env.production
 
 # Logs
 logs/
