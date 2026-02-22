@@ -237,7 +237,7 @@ export async function fetchTokenPricesUSD(contractAddresses: string[]): Promise<
       const contracts = contractAddresses.map(a => a.toLowerCase()).join(',');
       const tokenRes = await fetch(`https://api.coingecko.com/api/v3/simple/token_price/ethereum?contract_addresses=${contracts}&vs_currencies=usd`);
       if (tokenRes.ok) {
-        const tokenData = await tokenRes.json();
+        const tokenData = await tokenRes.json() as any;
         for (const [addr, priceObj] of Object.entries(tokenData)) {
           if ((priceObj as any)?.usd) {
             prices.set(addr.toLowerCase(), (priceObj as any).usd);
