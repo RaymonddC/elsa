@@ -63,7 +63,7 @@ jobs:
           ETHERSCAN_API_KEY=${{ secrets.ETHERSCAN_API_KEY }},\
           GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }},\
           JWT_SECRET=${{ secrets.JWT_SECRET }},\
-          FRONTEND_URL=https://project-30dd0d97-4e23-4201-ac7.web.app,https://project-30dd0d97-4e23-4201-ac7.firebaseapp.com"
+          FRONTEND_URL=${{ vars.FRONTEND_URL }}"
 
       - name: Show deployed URL
         run: |
