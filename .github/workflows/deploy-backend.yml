@@ -1,0 +1,67 @@
+name: Deploy Backend to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
+      - 'Dockerfile'
+
+env:
+  PROJECT_ID: project-30dd0d97-4e23-4201-ac7
+  REGION: asia-southeast1
+  SERVICE: elsa-backend
+  IMAGE: asia-southeast1-docker.pkg.dev/project-30dd0d97-4e23-4201-ac7/elsa-repo/backend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker asia-southeast1-docker.pkg.dev --quiet
+
+      - name: Build and push Docker image
+        run: |
+          docker build -t ${{ env.IMAGE }}:${{ github.sha }} -t ${{ env.IMAGE }}:latest .
+          docker push ${{ env.IMAGE }}:${{ github.sha }}
+          docker push ${{ env.IMAGE }}:latest
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE }} \
+            --image ${{ env.IMAGE }}:${{ github.sha }} \
+            --platform managed \
+            --region ${{ env.REGION }} \
+            --allow-unauthenticated \
+            --port 3000 \
+            --set-env-vars="NODE_ENV=production,\
+          ELASTICSEARCH_URL=${{ secrets.ELASTICSEARCH_URL }},\
+          KIBANA_URL=${{ secrets.KIBANA_URL }},\
+          ELASTIC_API_KEY=${{ secrets.ELASTIC_API_KEY }},\
+          ELASTIC_AGENT_ID=${{ secrets.ELASTIC_AGENT_ID }},\
+          ELASTIC_CONNECTOR_ID=${{ secrets.ELASTIC_CONNECTOR_ID }},\
+          ETHERSCAN_API_KEY=${{ secrets.ETHERSCAN_API_KEY }},\
+          GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }},\
+          JWT_SECRET=${{ secrets.JWT_SECRET }}"
+
+      - name: Show deployed URL
+        run: |
+          echo "Backend deployed at:"
+          gcloud run services describe ${{ env.SERVICE }} \
+            --region ${{ env.REGION }} \
+            --format='value(status.url)'
