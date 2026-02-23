@@ -72,66 +72,23 @@ export default function LoginPage() {
 
         {/* Sign in */}
         <div className="flex flex-col items-center" style={{ animation: 'slideUp 0.5s ease-out 0.55s both', gap: '10px' }}>
-          {/* Button container: custom visual + invisible Google overlay */}
-          <div
-            style={{ position: 'relative', width: '260px', height: '44px', cursor: 'pointer' }}
-            onMouseEnter={(e) => {
-              const btn = e.currentTarget.querySelector('.custom-btn') as HTMLElement;
-              if (btn) {
-                btn.style.background = 'rgba(255,255,255,0.08)';
-                btn.style.borderColor = 'rgba(255,255,255,0.15)';
-                btn.style.transform = 'translateY(-1px)';
-                btn.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
+          <GoogleLogin
+            onSuccess={async (response) => {
+              try {
+                if (response.credential) {
+                  await login(response.credential);
+                }
+              } catch {
+                alert('Sign in failed. Please try again.');
               }
             }}
-            onMouseLeave={(e) => {
-              const btn = e.currentTarget.querySelector('.custom-btn') as HTMLElement;
-              if (btn) {
-                btn.style.background = 'rgba(255,255,255,0.04)';
-                btn.style.borderColor = 'rgba(255,255,255,0.08)';
-                btn.style.transform = 'translateY(0)';
-                btn.style.boxShadow = 'none';
-              }
-            }}
-          >
-            {/* Custom visual button (not clickable) */}
-            <span
-              className="custom-btn flex items-center justify-center transition-all duration-300"
-              style={{
-                position: 'absolute',
-                inset: 0,
-                pointerEvents: 'none',
-                borderRadius: '22px',
-                border: '1px solid rgba(255,255,255,0.08)',
-                background: 'rgba(255,255,255,0.04)',
-                gap: '10px',
-              }}
-            >
-              <GoogleIcon />
-              <span style={{ fontSize: '13px', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>Continue with Google</span>
-            </span>
-
-            {/* Invisible Google button overlay — receives the actual click */}
-            <div style={{ position: 'absolute', inset: 0, opacity: 0, overflow: 'hidden', borderRadius: '22px' }}>
-              <GoogleLogin
-                onSuccess={async (response) => {
-                  try {
-                    if (response.credential) {
-                      await login(response.credential);
-                    }
-                  } catch {
-                    alert('Sign in failed. Please try again.');
-                  }
-                }}
-                onError={() => alert('Google Sign In failed')}
-                theme="filled_black"
-                size="large"
-                text="continue_with"
-                shape="pill"
-                width="260"
-              />
-            </div>
-          </div>
+            onError={() => alert('Google Sign In failed')}
+            theme="filled_black"
+            size="large"
+            text="continue_with"
+            shape="pill"
+            width="260"
+          />
 
           <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.1)' }}>Secured with Google OAuth 2.0</p>
         </div>
