@@ -4,19 +4,19 @@
  */
 
 import { Router } from 'express';
-import { verifyGoogleToken, findOrCreateUser, generateToken } from '../services/auth';
+import { verifyGoogleAccessToken, findOrCreateUser, generateToken } from '../services/auth';
 
 const router = Router();
 
 router.post('/auth/google', async (req, res) => {
   try {
-    const { credential } = req.body;
-    if (!credential) {
-      res.status(400).json({ error: 'Missing credential' });
+    const { access_token } = req.body;
+    if (!access_token) {
+      res.status(400).json({ error: 'Missing access_token' });
       return;
     }
 
-    const profile = await verifyGoogleToken(credential);
+    const profile = await verifyGoogleAccessToken(access_token);
     const { userId, user } = await findOrCreateUser(profile);
     const token = generateToken(userId, user.email);
 

@@ -1,9 +1,26 @@
-import { GoogleLogin } from '@react-oauth/google';
+import { useGoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
 import { Scan, TrendingUp, Eye } from 'lucide-react';
 
+const GoogleIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 48 48" fill="none">
+    <path d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z" fill="#10b981" />
+  </svg>
+);
+
 export default function LoginPage() {
   const { login } = useAuth();
+
+  const googleLogin = useGoogleLogin({
+    onSuccess: async (tokenResponse) => {
+      try {
+        await login(tokenResponse.access_token);
+      } catch {
+        alert('Sign in failed. Please try again.');
+      }
+    },
+    onError: () => alert('Google Sign In failed'),
+  });
 
   return (
     <div className="h-screen w-screen flex items-center justify-center overflow-hidden" style={{ background: 'linear-gradient(145deg, #080a0b 0%, #0a0f0d 40%, #090b0c 100%)', animation: 'fadeIn 0.6s ease-out' }}>
@@ -66,23 +83,33 @@ export default function LoginPage() {
 
         {/* Sign in */}
         <div className="flex flex-col items-center" style={{ animation: 'slideUp 0.5s ease-out 0.55s both', gap: '10px' }}>
-          <GoogleLogin
-            onSuccess={async (response) => {
-              try {
-                if (response.credential) {
-                  await login(response.credential);
-                }
-              } catch {
-                alert('Sign in failed. Please try again.');
-              }
+          <span
+            onClick={() => googleLogin()}
+            className="flex items-center justify-center cursor-pointer transition-all duration-300"
+            style={{
+              width: '260px',
+              height: '44px',
+              borderRadius: '22px',
+              border: '1px solid rgba(255,255,255,0.08)',
+              background: 'rgba(255,255,255,0.04)',
+              gap: '10px',
             }}
-            onError={() => alert('Google Sign In failed')}
-            theme="filled_black"
-            size="large"
-            text="continue_with"
-            shape="pill"
-            width="260"
-          />
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
+              e.currentTarget.style.transform = 'translateY(-1px)';
+              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
+          >
+            <GoogleIcon />
+            <span style={{ fontSize: '13px', fontWeight: 500, color: 'rgba(255,255,255,0.7)' }}>Continue with Google</span>
+          </span>
 
           <p style={{ fontSize: '9px', color: 'rgba(255,255,255,0.1)' }}>Secured with Google OAuth 2.0</p>
         </div>

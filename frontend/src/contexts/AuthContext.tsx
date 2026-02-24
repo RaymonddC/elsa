@@ -12,7 +12,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  login: (credential: string) => Promise<void>;
+  login: (accessToken: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -39,11 +39,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const login = async (credential: string) => {
+  const login = async (accessToken: string) => {
     const response = await fetch(`${API_URL}/auth/google`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential }),
+      body: JSON.stringify({ access_token: accessToken }),
     });
 
     if (!response.ok) throw new Error('Login failed');

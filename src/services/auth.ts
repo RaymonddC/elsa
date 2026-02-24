@@ -17,13 +17,15 @@ function getJwtSecret(): string {
   return secret;
 }
 
-export async function verifyGoogleToken(idToken: string) {
-  const ticket = await googleClient.verifyIdToken({
-    idToken,
-    audience: process.env.GOOGLE_CLIENT_ID,
+export async function verifyGoogleAccessToken(accessToken: string) {
+  const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
   });
-  const payload = ticket.getPayload();
-  if (!payload?.sub || !payload?.email) {
+  if (!response.ok) {
+    throw new Error('Invalid Google access token');
+  }
+  const payload = await response.json();
+  if (!payload.sub || !payload.email) {
     throw new Error('Invalid Google token payload');
   }
   return {
