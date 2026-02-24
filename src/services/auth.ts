@@ -28,7 +28,7 @@ export async function verifyGoogleAccessToken(accessToken: string) {
   if (!response.ok) {
     throw new Error('Invalid Google access token');
   }
-  const payload: GoogleUserInfo = await response.json();
+  const payload = (await response.json()) as GoogleUserInfo;
   if (!payload.sub || !payload.email) {
     throw new Error('Invalid Google token payload');
   }
