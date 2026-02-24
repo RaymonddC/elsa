@@ -3,13 +3,17 @@
  * Google OAuth token verification and JWT session management
  */
 
-import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 import { esClient } from '../config/elasticsearch';
 import { USER_INDEX } from '../types/auth';
 import type { User } from '../types/auth';
 
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+interface GoogleUserInfo {
+  sub: string;
+  email: string;
+  name?: string;
+  picture?: string;
+}
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -24,7 +28,7 @@ export async function verifyGoogleAccessToken(accessToken: string) {
   if (!response.ok) {
     throw new Error('Invalid Google access token');
   }
-  const payload = await response.json();
+  const payload: GoogleUserInfo = await response.json();
   if (!payload.sub || !payload.email) {
     throw new Error('Invalid Google token payload');
   }
