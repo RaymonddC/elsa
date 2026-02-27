@@ -94,6 +94,7 @@ function App() {
   };
 
   const handleSendMessage = async (question: string) => {
+    if (isLoading) return;
     const userMessage: ChatMessage = { role: 'user', content: question, timestamp: new Date().toISOString() };
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
@@ -144,6 +145,9 @@ function App() {
       }
 
       if (!agentResponse) throw new Error('No response received from agent');
+      if (!agentResponse.success && !agentResponse.final_answer) {
+        throw new Error(agentResponse.error || 'Analysis failed');
+      }
 
       const assistantMessage: ChatMessage = {
         role: 'assistant',
@@ -157,11 +161,13 @@ function App() {
       setLiveSteps([]);
       await saveSession(finalMessages, sessionId);
 
-      showToast({
-        type: 'success',
-        message: 'Wallet analyzed successfully!',
-        duration: 2000,
-      });
+      if (agentResponse.success && agentResponse.final_answer) {
+        showToast({
+          type: 'success',
+          message: 'Analysis complete',
+          duration: 2000,
+        });
+      }
     } catch (error) {
       showToast({
         type: 'error',

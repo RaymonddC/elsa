@@ -30,7 +30,7 @@ app.use(cors({
   origin: allowedOrigins,
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // Request logging
 app.use((req, _res, next) => {
@@ -186,12 +186,15 @@ app.post('/analyze-stream', requireAuth, async (req: AuthRequest, res) => {
 
     const sendEvent = (event: StepEvent) => {
       res.write(`data: ${JSON.stringify(event)}\n\n`);
+      // Flush immediately so the browser receives each event as it fires
+      if (typeof (res as any).flush === 'function') (res as any).flush();
     };
 
     const response = await analyzeQuestion(question, sendEvent);
 
     // Send final result
     res.write(`data: ${JSON.stringify({ type: 'result', ...response })}\n\n`);
+    if (typeof (res as any).flush === 'function') (res as any).flush();
     res.end();
   } catch (error) {
     if (!res.headersSent) {

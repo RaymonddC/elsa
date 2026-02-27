@@ -219,11 +219,14 @@ code, pre, .font-mono {
 }
 
 .prose-elsa h3 {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
-  color: rgba(255,255,255,0.8);
-  margin-top: 0.8em;
-  margin-bottom: 0.35em;
+  color: rgba(255,255,255,0.75);
+  margin-top: 1.2em;
+  margin-bottom: 0.5em;
+  padding-left: 0.65em;
+  border-left: 2px solid rgba(16,185,129,0.3);
+  line-height: 1.4;
 }
 
 .prose-elsa h4 {
@@ -338,10 +341,11 @@ code, pre, .font-mono {
 .prose-elsa table {
   width: 100%;
   border-collapse: collapse;
-  margin: 0.5em 0;
+  margin: 0.6em 0;
   font-size: 11.5px;
   border-radius: 8px;
   overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.04);
 }
 
 .prose-elsa th {
@@ -349,17 +353,22 @@ code, pre, .font-mono {
   font-weight: 600;
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: rgba(255,255,255,0.35);
-  padding: 0.5em 0.7em;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-  background: rgba(255,255,255,0.02);
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.3);
+  padding: 0.55em 0.85em;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.025);
 }
 
 .prose-elsa td {
-  padding: 0.4em 0.7em;
+  padding: 0.45em 0.85em;
   border-bottom: 1px solid rgba(255,255,255,0.03);
-  color: rgba(255,255,255,0.6);
+  color: rgba(255,255,255,0.58);
+  vertical-align: middle;
+}
+
+.prose-elsa tr:hover td {
+  background: rgba(255,255,255,0.015);
 }
 
 .prose-elsa tr:last-child td {
@@ -391,6 +400,30 @@ code, pre, .font-mono {
 
 .prose-elsa > *:last-child {
   margin-bottom: 0;
+}
+
+/* Plain chat mode — no section accents, looser text */
+.prose-chat h2 {
+  font-size: 11px;
+  color: rgba(255,255,255,0.45);
+  text-transform: none;
+  letter-spacing: 0;
+  border-bottom: none;
+  padding-bottom: 0;
+  font-weight: 600;
+}
+
+.prose-chat h3 {
+  border-left: none;
+  padding-left: 0;
+  font-size: 12.5px;
+  color: rgba(255,255,255,0.7);
+  margin-top: 1em;
+}
+
+.prose-chat h4 {
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
 }
 
 /* Animations */

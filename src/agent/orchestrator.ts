@@ -32,6 +32,13 @@ function extractWalletAddress(text: string): string | null {
     return null;
 }
 
+function extractLimit(text: string): number {
+    // Match "with 500 transactions", "with up to 1000 txns", "load 1000 transactions", etc.
+    const match = text.match(/\b(?:with\s+(?:up\s+to\s+)?|load\s+)(\d{2,4})\s*(?:transaction|tx|txns?)\b/i);
+    if (match) return Math.min(Math.max(parseInt(match[1], 10), 50), 2000);
+    return 250;
+}
+
 export type StepEvent = {
     type: 'thinking' | 'tool_start' | 'tool_done' | 'done' | 'error';
     step_number: number;
@@ -143,6 +150,37 @@ async function sendToElasticAgent(
     return { answer, conversationId: newConversationId, steps };
 }
 
+function buildAnalysisPrompt(question: string): string {
+    return `${question}
+
+---
+RESPONSE FORMAT RULES (follow exactly, no exceptions):
+- Do NOT use any emojis anywhere in the response
+- Use clean markdown with headers and tables
+- Do NOT include an "Overview" or "Transaction Breakdown" section — those stats are already displayed in the UI
+- Do NOT include a "Wallet Summary" or "Token Activity" section — also already shown in the UI
+- Use ONLY the following four sections in this exact order:
+
+## Wallet Analysis: [shortened address]
+
+### Key Observations
+- [bullet point observations about transaction patterns, notable behavior, no emojis]
+
+### Anomaly Report
+| Type | Severity | Details |
+|------|----------|---------|
+[rows, or single row: | None detected | - | - |]
+
+### Notable Transactions
+| Value | Direction | Date | Reason |
+|-------|-----------|------|--------|
+[up to 5 rows of the most significant individual transactions — large transfers, first/last activity, unusual patterns. Do NOT include tx hashes. If no standout transactions: | None | - | - | - |]
+
+### Summary
+[2-3 concise paragraphs. No emojis. End with a recommendation if relevant.]
+`;
+}
+
 export async function analyzeQuestion(
     question: string,
     onStep?: (event: StepEvent) => void,
@@ -159,15 +197,18 @@ export async function analyzeQuestion(
 
         if (walletAddress) {
             const fetchStart = Date.now();
+            const txLimit = extractLimit(question);
             onStep?.({
                 type: 'tool_start',
                 step_number: ++stepNumber,
-                message: 'Fetching wallet data from blockchain...',
+                message: `Fetching up to ${txLimit} transactions from blockchain...`,
                 tool_name: 'fetch_wallet_data',
             });
 
             try {
-                const fetchResult = await executeTool('fetch_wallet_data', { address: walletAddress });
+                const fetchResult = await executeTool('fetch_wallet_data', { address: walletAddress, limit: txLimit }, (msg) => {
+                    onStep?.({ type: 'tool_start', step_number: stepNumber, message: msg, tool_name: 'fetch_wallet_data' });
+                });
                 const fetchTime = Date.now() - fetchStart;
 
                 reasoningSteps.push({
@@ -206,9 +247,25 @@ export async function analyzeQuestion(
         }
 
         // Step 2: Send to Elastic Agent Builder for analysis
-        onStep?.({ type: 'thinking', step_number: ++stepNumber, message: 'Elastic Agent analyzing data...' });
+        const agentStart = Date.now();
+        onStep?.({
+            type: 'tool_start',
+            step_number: ++stepNumber,
+            message: 'Analyzing with Elastic AI...',
+            tool_name: 'elastic_agent',
+        });
 
-        const { answer, steps } = await sendToElasticAgent(null, question);
+        const prompt = walletAddress ? buildAnalysisPrompt(question) : question;
+        const { answer, steps } = await sendToElasticAgent(null, prompt);
+        const agentTime = Date.now() - agentStart;
+
+        onStep?.({
+            type: 'tool_done',
+            step_number: stepNumber,
+            message: 'AI analysis complete',
+            tool_name: 'elastic_agent',
+            execution_time_ms: agentTime,
+        });
 
         // Step 3: Process tool steps from Elastic Agent for Glass Box
         const toolLabel: Record<string, string> = {
@@ -249,9 +306,9 @@ export async function analyzeQuestion(
             onStep?.({
                 type: 'tool_done',
                 step_number: stepNumber,
-                message: `${toolLabel[step.tool] || step.tool} complete`,
+                message: toolLabel[step.tool] || step.tool,
                 tool_name: step.tool,
-                execution_time_ms: 0,
+                // No execution_time_ms — these steps ran inside Elastic Agent, timing unknown
             });
         }
 
@@ -278,6 +335,9 @@ export async function analyzeQuestion(
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
         console.error('Error in Elastic Agent orchestrator:', errorMessage);
+        if (error instanceof Error && error.stack) {
+            console.error('[Stack trace]', error.stack);
+        }
         onStep?.({ type: 'error', step_number: stepNumber, message: errorMessage });
 
         return {

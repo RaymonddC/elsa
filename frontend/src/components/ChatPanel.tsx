@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, AlertCircle, RotateCcw, ChevronDown, ChevronUp, Database, Search, Shield, Brain, CheckCircle2 } from 'lucide-react';
+import { ArrowUp, AlertCircle, RotateCcw, ChevronDown, ChevronUp, Database, Search, Shield, Brain, CheckCircle2, ExternalLink, Clock } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChatMessage } from '../types/agent';
@@ -52,9 +52,21 @@ function extractWalletAddress(msg: ChatMessage): string | null {
 /** Detect risk level from markdown content text */
 function detectRiskFromContent(text: string): 'Low' | 'Medium' | 'High' | undefined {
   const c = text.toLowerCase();
-  if (c.includes('low risk') || c.includes('risk: low') || c.includes('no significant anomalies') || c.includes('no anomalies') || c.includes('no suspicious')) return 'Low';
-  if (c.includes('medium risk') || c.includes('moderate risk') || c.includes('some anomalies') || c.includes('minor anomalies')) return 'Medium';
+
+  // Table-based severity (from Anomaly Report table: | High | or | Critical |)
+  const hasHighSeverityRow = /\|\s*(high|critical)\s*\|/i.test(text);
+  const hasMediumSeverityRow = /\|\s*medium\s*\|/i.test(text);
+  const hasLowSeverityRow = /\|\s*low\s*\|/i.test(text);
+  const hasNoneDetected = /none detected|no anomal/i.test(text);
+
+  if (hasHighSeverityRow) return 'High';
+  if (hasMediumSeverityRow && !hasHighSeverityRow) return 'Medium';
+  if (hasNoneDetected || hasLowSeverityRow) return 'Low';
+
+  // Keyword fallback
   if (c.includes('high risk') || c.includes('risk: high') || c.includes('suspicious') || c.includes('significant anomalies') || c.includes('flagged')) return 'High';
+  if (c.includes('medium risk') || c.includes('moderate risk') || c.includes('some anomalies') || c.includes('minor anomalies')) return 'Medium';
+  if (c.includes('low risk') || c.includes('risk: low') || c.includes('no significant anomalies') || c.includes('no anomalies') || c.includes('no suspicious')) return 'Low';
   return undefined;
 }
 
@@ -164,6 +176,24 @@ function extractWalletSummary(msg: ChatMessage): WalletSummaryData | undefined {
   return undefined;
 }
 
+/** Extract how many transactions were actually fetched from the fetch_wallet_data tool result */
+function extractTransactionsFetched(msg: ChatMessage): { fetched: number; total: number } | undefined {
+  const agent = msg.agentResponse || (msg as any).agent_response;
+  if (!agent?.reasoning_steps) return undefined;
+  for (const step of agent.reasoning_steps) {
+    if (step.tool_call?.tool_name === 'fetch_wallet_data') {
+      const result = step.tool_result?.result as any;
+      if (result?.transactions_fetched != null) {
+        return {
+          fetched: Number(result.transactions_fetched),
+          total: Number(result.total_transactions ?? result.transactions_fetched),
+        };
+      }
+    }
+  }
+  return undefined;
+}
+
 const placeholderHints = [
   'Paste a wallet address...',
   'Try a Bitcoin wallet...',
@@ -177,6 +207,7 @@ const TOOL_ICONS: Record<string, typeof Database> = {
   get_wallet_summary: Search,
   search_transactions: Search,
   detect_anomalies: Shield,
+  elastic_agent: Brain,
 };
 
 interface ConsolidatedStep {
@@ -193,18 +224,22 @@ function consolidateSteps(steps: LiveStep[]): ConsolidatedStep[] {
 
   for (const s of steps) {
     if (s.type === 'thinking') {
-      // Only add one "Thinking" entry
-      if (!result.some(r => r.label === 'Thinking')) {
-        result.push({ label: 'Thinking', done: true });
-      }
+      // Skip — shown in header only, not in the list
     } else if (s.type === 'tool_start' && s.tool_name) {
-      const idx = result.length;
-      seenTools.set(s.tool_name, idx);
-      result.push({ label: s.message, tool_name: s.tool_name, done: false });
+      const existingIdx = seenTools.get(s.tool_name);
+      if (existingIdx != null) {
+        // Progress update — just update the label in place, no new entry
+        result[existingIdx].label = s.message;
+      } else {
+        const idx = result.length;
+        seenTools.set(s.tool_name, idx);
+        result.push({ label: s.message, tool_name: s.tool_name, done: false });
+      }
     } else if (s.type === 'tool_done' && s.tool_name) {
       const idx = seenTools.get(s.tool_name);
       if (idx != null && result[idx]) {
         result[idx].done = true;
+        result[idx].label = s.message; // use the done label (e.g. "Wallet data cached")
         result[idx].time_ms = s.execution_time_ms;
       }
     }
@@ -214,12 +249,18 @@ function consolidateSteps(steps: LiveStep[]): ConsolidatedStep[] {
 
 export default function ChatPanel({ messages, onSendMessage, isLoading, liveSteps = [], sessionTitle }: ChatPanelProps) {
   const [input, setInput] = useState('');
-  const [stepsExpanded, setStepsExpanded] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<ConsolidatedStep[]>([]);
+  const [stepsExpanded, setStepsExpanded] = useState(false);
   const [placeholderIdx, setPlaceholderIdx] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const lastMsgRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { showToast } = useToast();
+  // Set to true when the user manually scrolls away — suppresses auto-scroll until next send
+  const userScrolledAwayRef = useRef(false);
+  // Prevents the scroll event listener from treating programmatic scrolls as manual
+  const isProgrammaticScrollRef = useRef(false);
 
   useEffect(() => {
     if (messages.length > 0) return;
@@ -229,8 +270,42 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, liveStep
     return () => clearInterval(interval);
   }, [messages.length]);
 
+  // Detect manual scrolling — if user scrolls up more than 80px from bottom, stop auto-scrolling
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const handleScroll = () => {
+      if (isProgrammaticScrollRef.current) return;
+      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+      userScrolledAwayRef.current = distanceFromBottom > 80;
+    };
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const lastMsg = messages[messages.length - 1];
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    // Always scroll for user messages (they just sent it); respect manual scroll for assistant
+    if (lastMsg.role !== 'user' && userScrolledAwayRef.current) return;
+
+    isProgrammaticScrollRef.current = true;
+    requestAnimationFrame(() => {
+      if (lastMsg.role === 'user') {
+        const target = container.scrollHeight - container.clientHeight * 1.4;
+        container.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+      } else {
+        if (lastMsgRef.current) {
+          const msgTop = lastMsgRef.current.offsetTop;
+          container.scrollTo({ top: Math.max(0, msgTop - container.clientHeight * 0.25), behavior: 'smooth' });
+        }
+      }
+      // Release the programmatic flag after the smooth scroll settles
+      setTimeout(() => { isProgrammaticScrollRef.current = false; }, 600);
+    });
   }, [messages]);
 
   // Track latest non-empty steps so we don't lose them when App clears liveSteps before isLoading goes false
@@ -249,7 +324,6 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, liveStep
         setCompletedSteps(consolidateSteps(lastStepsRef.current));
         lastStepsRef.current = [];
       }
-      setStepsExpanded(false);
     }
     if (isLoading && !prevLoading.current) {
       setCompletedSteps([]);
@@ -280,6 +354,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, liveStep
       return;
     }
 
+    userScrolledAwayRef.current = false;
     onSendMessage(input.trim());
     setInput('');
   };
@@ -348,7 +423,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, liveStep
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center px-6 pb-20 animate-[fadeIn_0.5s_ease-out]">
             {/* Logo */}
@@ -387,9 +462,9 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, liveStep
             </div>
           </div>
         ) : (
-          <div style={{ maxWidth: '700px', margin: '0 auto', padding: '20px 24px 16px' }}>
+          <div style={{ maxWidth: '700px', margin: '0 auto', padding: '20px 24px 80px' }}>
             {messages.map((msg, idx) => (
-              <div key={idx} style={{ marginTop: idx > 0 ? '20px' : '0' }}>
+              <div key={idx} ref={idx === messages.length - 1 ? lastMsgRef : null} style={{ marginTop: idx > 0 ? '20px' : '0' }}>
                 {msg.role === 'user' ? (
                   <div className="flex justify-end">
                     <div style={{ maxWidth: '80%' }}>
@@ -410,45 +485,39 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, liveStep
                   </div>
                 ) : (
                   <div>
-                    {/* ELSA label + completed steps toggle inline */}
+                    {/* ELSA label + completed steps always-visible */}
                     <div style={{ marginBottom: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 600, color: '#10b981', letterSpacing: '0.03em' }}>ELSA</span>
-                        {!isLoading && completedSteps.length > 0 && idx === messages.length - 1 && msg.role === 'assistant' && (
-                          <span
+                      <span style={{ fontSize: '11px', fontWeight: 600, color: '#10b981', letterSpacing: '0.03em' }}>ELSA</span>
+                      {!isLoading && completedSteps.filter(s => s.tool_name).length > 0 && idx === messages.length - 1 && msg.role === 'assistant' && completedSteps.some(s => s.tool_name === 'fetch_wallet_data') && (
+                        <div style={{ marginTop: '6px' }}>
+                          {/* Toggle header */}
+                          <button
                             onClick={() => setStepsExpanded(v => !v)}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer', padding: '2px 8px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)', transition: 'all 0.15s ease' }}
-                            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.03)'; }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', color: 'rgba(255,255,255,0.2)' }}
                           >
-                            <CheckCircle2 style={{ width: '10px', height: '10px', color: 'rgba(16,185,129,0.4)' }} strokeWidth={1.5} />
-                            <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)' }}>
-                              {completedSteps.filter(s => s.tool_name).length} steps
-                            </span>
+                            <CheckCircle2 style={{ width: '11px', height: '11px', color: 'rgba(16,185,129,0.4)' }} strokeWidth={1.5} />
+                            <span style={{ fontSize: '11px' }}>{completedSteps.filter(s => s.tool_name).length} steps</span>
                             {stepsExpanded
-                              ? <ChevronUp style={{ width: '10px', height: '10px', color: 'rgba(255,255,255,0.12)' }} strokeWidth={1.5} />
-                              : <ChevronDown style={{ width: '10px', height: '10px', color: 'rgba(255,255,255,0.12)' }} strokeWidth={1.5} />
+                              ? <ChevronUp style={{ width: '11px', height: '11px' }} strokeWidth={1.5} />
+                              : <ChevronDown style={{ width: '11px', height: '11px' }} strokeWidth={1.5} />
                             }
-                          </span>
-                        )}
-                      </div>
-                      {/* Expanded steps dropdown */}
-                      {!isLoading && stepsExpanded && completedSteps.length > 0 && idx === messages.length - 1 && msg.role === 'assistant' && (
-                        <div style={{ marginTop: '6px', marginLeft: '2px', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                          {completedSteps.map((step, i) => {
-                            const Icon = step.tool_name ? (TOOL_ICONS[step.tool_name] || Brain) : Brain;
-                            return (
-                              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '2px 2px' }}>
-                                <Icon style={{ width: '10px', height: '10px', color: 'rgba(16,185,129,0.3)', flexShrink: 0 }} strokeWidth={1.5} />
-                                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)' }}>{step.label}</span>
-                                {step.time_ms != null && (
-                                  <span style={{ fontSize: '9px', color: 'rgba(255,255,255,0.08)', marginLeft: 'auto' }}>
-                                    {step.time_ms > 1000 ? `${(step.time_ms / 1000).toFixed(1)}s` : `${step.time_ms}ms`}
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
+                          </button>
+                          {/* Dropdown content */}
+                          {stepsExpanded && (
+                            <div style={{ marginTop: '4px', borderRadius: '12px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {completedSteps.filter(s => s.tool_name).map((step, i) => (
+                                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <CheckCircle2 style={{ width: '11px', height: '11px', color: 'rgba(16,185,129,0.45)', flexShrink: 0 }} strokeWidth={1.5} />
+                                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.22)' }}>{step.label}</span>
+                                  {step.time_ms != null && (
+                                    <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.1)', marginLeft: 'auto' }}>
+                                      {step.time_ms > 1000 ? `${(step.time_ms / 1000).toFixed(1)}s` : `${step.time_ms}ms`}
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -516,34 +585,57 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, liveStep
                         const sanitize = (text: string) => text.replace(/~/g, '\\~');
                         const hasChart = addr && msg.content.includes(chartMarker);
 
-                        // Collect all full hashes from tool results to resolve truncated ones
+                        // Collect all full hashes/addresses from tool results to resolve truncated ones
                         const fullHashes: string[] = [];
                         const agent = msg.agentResponse || (msg as any).agent_response;
                         if (agent?.reasoning_steps) {
                           for (const step of agent.reasoning_steps) {
                             const raw = JSON.stringify(step.tool_result?.result || '');
-                            const matches = raw.match(/0x[a-fA-F0-9]{40,66}/g);
-                            if (matches) fullHashes.push(...matches);
-                            // Also BTC tx hashes (64 hex chars)
-                            const btcMatches = raw.match(/\b[a-fA-F0-9]{64}\b/g);
-                            if (btcMatches) fullHashes.push(...btcMatches);
+                            // ETH addresses and tx hashes
+                            const ethMatches = raw.match(/0x[a-fA-F0-9]{40,66}/g);
+                            if (ethMatches) fullHashes.push(...ethMatches);
+                            // BTC tx hashes (64 hex chars)
+                            const btcTxMatches = raw.match(/\b[a-fA-F0-9]{64}\b/g);
+                            if (btcTxMatches) fullHashes.push(...btcTxMatches);
+                            // BTC bech32 addresses (bc1...)
+                            const bech32Matches = raw.match(/\bbc1[a-zA-Z0-9]{25,62}\b/g);
+                            if (bech32Matches) fullHashes.push(...bech32Matches);
+                            // BTC legacy addresses (1... or 3...)
+                            const legacyBtcMatches = raw.match(/\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/g);
+                            if (legacyBtcMatches) fullHashes.push(...legacyBtcMatches);
                           }
                         }
                         const uniqueHashes = [...new Set(fullHashes)];
+                        // Determine chain from wallet address so we route tx hashes to the right explorer
+                        const walletIsEth = addr?.startsWith('0x') ?? false;
 
-                        // Expand truncated hashes (e.g. 0x4b20fcce…) to full hash
-                        const expandHashes = (text: string): string => {
-                          return text.replace(/\b(0x[a-fA-F0-9]{6,})[…\.]{1,3}\b/g, (match, prefix) => {
-                            const full = uniqueHashes.find(h => h.toLowerCase().startsWith(prefix.toLowerCase()));
-                            return full ? `\`${full}\`` : match;
-                          }).replace(/\b([a-fA-F0-9]{8,})[…\.]{1,3}\b/g, (match, prefix) => {
-                            const full = uniqueHashes.find(h => h.toLowerCase().startsWith(prefix.toLowerCase()));
-                            return full ? `\`${full}\`` : match;
-                          });
+                        const txExplorerUrl = (hash: string): string => {
+                          // Explicit 0x prefix → always ETH
+                          if (hash.startsWith('0x')) return `https://etherscan.io/tx/${hash}`;
+                          // 64 hex chars without prefix — use wallet chain context
+                          if (walletIsEth) return `https://etherscan.io/tx/0x${hash}`;
+                          return `https://mempool.space/tx/${hash}`;
                         };
 
-                        const renderMarkdown = (text: string) => (
-                          <div className="prose-elsa">
+                        // Expand truncated hashes/addresses (e.g. 0x4b20fcce… or bc1qx5ku…) to full value
+                        const expandHashes = (text: string): string => {
+                          return text
+                            .replace(/\b(0x[a-fA-F0-9]{6,})[…\.]{1,3}\b/g, (match, prefix) => {
+                              const full = uniqueHashes.find(h => h.toLowerCase().startsWith(prefix.toLowerCase()));
+                              return full ? `\`${full}\`` : match;
+                            })
+                            .replace(/\b(bc1[a-zA-Z0-9]{4,})[…\.]{1,3}\b/g, (match, prefix) => {
+                              const full = uniqueHashes.find(h => h.toLowerCase().startsWith(prefix.toLowerCase()));
+                              return full ? `\`${full}\`` : match;
+                            })
+                            .replace(/\b([a-fA-F0-9]{8,})[…\.]{1,3}\b/g, (match, prefix) => {
+                              const full = uniqueHashes.find(h => h.toLowerCase().startsWith(prefix.toLowerCase()));
+                              return full ? `\`${full}\`` : match;
+                            });
+                        };
+
+                        const renderMarkdown = (text: string, chatMode = false) => (
+                          <div className={chatMode ? 'prose-elsa prose-chat' : 'prose-elsa'}>
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm]}
                               components={{
@@ -566,19 +658,95 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, liveStep
                                 },
                                 code: ({ children, className }) => {
                                   const text = String(children).trim();
-                                  const isHash = /^(0x)?[a-fA-F0-9]{40,66}$/.test(text);
+                                  const isEthTx = /^0x[a-fA-F0-9]{64}$/.test(text);
+                                  const isBtcTx = /^[a-fA-F0-9]{64}$/.test(text);
+                                  const isAddress = /^(0x)?[a-fA-F0-9]{40,42}$/.test(text) || /^[13bc1][a-zA-Z0-9]{25,62}$/.test(text);
+                                  const isHash = isEthTx || isBtcTx || isAddress;
+
                                   if (isHash && !className) {
+                                    const short = text.length > 16 ? `${text.slice(0, 8)}…${text.slice(-6)}` : text;
+
+                                    if (isEthTx || isBtcTx) {
+                                      const explorerUrl = txExplorerUrl(text);
+                                      const explorerName = explorerUrl.includes('etherscan') ? 'Etherscan' : 'Mempool.space';
+                                      return (
+                                        <code
+                                          style={{ cursor: 'pointer', userSelect: 'all', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                          title={`View on ${explorerName}`}
+                                          onClick={() => window.open(explorerUrl, '_blank', 'noopener,noreferrer')}
+                                        >
+                                          {short}
+                                          <ExternalLink style={{ width: '9px', height: '9px', opacity: 0.5, flexShrink: 0 }} />
+                                        </code>
+                                      );
+                                    }
+
+                                    // Wallet address — copy full address on click
                                     return (
                                       <code
-                                        style={{ cursor: 'pointer', userSelect: 'all' }}
-                                        title="Click to copy"
-                                        onClick={() => { navigator.clipboard.writeText(text); }}
+                                        style={{ cursor: 'pointer' }}
+                                        title={`Click to copy: ${text}`}
+                                        onClick={() => {
+                                          navigator.clipboard.writeText(text);
+                                          showToast({ type: 'success', message: 'Address copied', duration: 2000 });
+                                        }}
                                       >
-                                        {text.length > 16 ? `${text.slice(0, 8)}…${text.slice(-6)}` : text}
+                                        {short}
                                       </code>
                                     );
                                   }
                                   return <code className={className}>{children}</code>;
+                                },
+                                td: ({ children, ...props }) => {
+                                  // Only inspect plain-text cells — React element children are already handled by the code component
+                                  if (typeof children === 'string') {
+                                    const raw = children.trim();
+                                    const lower = raw.toLowerCase();
+
+                                    const severityStyle: Record<string, React.CSSProperties> = {
+                                      high:     { color: '#f87171', fontWeight: 600 },
+                                      critical: { color: '#f87171', fontWeight: 600 },
+                                      medium:   { color: '#fbbf24', fontWeight: 600 },
+                                      low:      { color: '#34d399', fontWeight: 600 },
+                                      in:       { color: '#34d399', fontWeight: 600 },
+                                      out:      { color: '#f87171', fontWeight: 600 },
+                                    };
+
+                                    // Full ETH tx hash (0x + 64 hex)
+                                    const isEthTx = /^0x[a-fA-F0-9]{64}$/.test(raw);
+                                    // Full BTC tx hash (64 hex, no 0x prefix)
+                                    const isBtcTx = /^[a-fA-F0-9]{64}$/.test(raw);
+                                    // Truncated hash like "0x4b20fcce4e..." or "4b20fcce..."
+                                    const truncMatch = raw.match(/^(0x[a-fA-F0-9]{6,}|[a-fA-F0-9]{8,})[…\.]{1,3}$/);
+
+                                    if (isEthTx || isBtcTx || truncMatch) {
+                                      let fullHash = raw;
+                                      if (truncMatch) {
+                                        const prefix = truncMatch[1];
+                                        const found = uniqueHashes.find(h => h.toLowerCase().startsWith(prefix.toLowerCase()));
+                                        if (found) fullHash = found;
+                                      }
+                                      const url = txExplorerUrl(fullHash);
+                                      const explorerName = url.includes('etherscan') ? 'Etherscan' : 'Mempool.space';
+                                      return (
+                                        <td {...props}>
+                                          <span
+                                            onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+                                            title={`View on ${explorerName}`}
+                                            style={{ cursor: 'pointer', color: '#34d399', fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                          >
+                                            {`${fullHash.slice(0, 10)}…`}
+                                            <ExternalLink style={{ width: '9px', height: '9px', opacity: 0.5, flexShrink: 0 }} />
+                                          </span>
+                                        </td>
+                                      );
+                                    }
+
+                                    return <td {...props} style={severityStyle[lower]}>{children}</td>;
+                                  }
+
+                                  // React element children (e.g. <code> from expandHashes) — render as-is
+                                  return <td {...props}>{children}</td>;
                                 },
                               }}
                             >
@@ -590,6 +758,9 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, liveStep
                         // Strip sections from markdown that are already shown in the card UI
                         const stripRedundantSections = (text: string) => {
                           return text
+                            // Strip "Overview" and "Transaction Breakdown" — shown in card
+                            .replace(/#{1,4}\s*Overview[\s\S]*?(?=\n#{1,4}\s|\n\[CHART\]|$)/i, '')
+                            .replace(/#{1,4}\s*Transaction\s*Breakdown[\s\S]*?(?=\n#{1,4}\s|\n\[CHART\]|$)/i, '')
                             // Strip "Wallet Summary" — address, balance, received/sent, dates already in card
                             .replace(/#{1,4}\s*Wallet\s*Summary[\s\S]*?(?=\n#{1,4}\s|\n\[CHART\]|$)/i, '')
                             // Strip "Token Activity" — shown in TokenActivity component
@@ -602,30 +773,66 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, liveStep
 
                         if (addr) {
                           const chartNode = <TransactionChart address={addr} />;
+                          const txInfo = extractTransactionsFetched(msg);
+
+                          const loadMoreFooter = txInfo && txInfo.fetched < txInfo.total && (
+                            <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.2)' }}>
+                                {txInfo.fetched.toLocaleString()} of {txInfo.total.toLocaleString()} transactions analyzed
+                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.15)' }}>·</span>
+                                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.2)' }}>Load more?</span>
+                                  {([500, 1000, 2000] as const).filter(n => n > txInfo.fetched).slice(0, 2).map(n => (
+                                    <span
+                                      key={n}
+                                      onClick={() => onSendMessage(`Analyze ${addr} with ${n} transactions`)}
+                                      title="Will take longer to fetch"
+                                      style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 500, color: 'rgba(255,255,255,0.35)', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', cursor: 'pointer', transition: 'all 0.15s ease' }}
+                                      onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.7)'; e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'; }}
+                                      onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.35)'; e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.03)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
+                                    >
+                                      <Clock style={{ width: '9px', height: '9px', opacity: 0.5 }} strokeWidth={2} />
+                                      {n >= 1000 ? `${n / 1000}k` : n} txns
+                                    </span>
+                                  ))}
+                                </div>
+                            </div>
+                          );
 
                           if (hasChart) {
                             const [before, after] = msg.content.split(chartMarker);
                             const cleanBefore = stripRedundantSections(before);
                             const cleanAfter = after.trim() ? stripRedundantSections(after) : '';
                             return (
-                              <WalletDashboardCard address={addr} stats={stats} summary={summary} chart={chartNode}>
-                                <>
-                                  {cleanBefore && renderMarkdown(cleanBefore)}
-                                  {cleanAfter && renderMarkdown(cleanAfter)}
-                                </>
-                              </WalletDashboardCard>
+                              <>
+                                <WalletDashboardCard address={addr} stats={stats} summary={summary} chart={chartNode}>
+                                  <>
+                                    {cleanBefore && renderMarkdown(cleanBefore)}
+                                    {cleanAfter && renderMarkdown(cleanAfter)}
+                                  </>
+                                </WalletDashboardCard>
+                                {loadMoreFooter}
+                              </>
                             );
                           }
 
                           const cleanContent = stripRedundantSections(msg.content);
                           return (
-                            <WalletDashboardCard address={addr} stats={stats} summary={summary} chart={chartNode}>
-                              {cleanContent && renderMarkdown(cleanContent)}
-                            </WalletDashboardCard>
+                            <>
+                              <WalletDashboardCard address={addr} stats={stats} summary={summary} chart={chartNode}>
+                                {cleanContent && renderMarkdown(cleanContent)}
+                              </WalletDashboardCard>
+                              {loadMoreFooter}
+                            </>
                           );
                         }
 
-                        return renderMarkdown(msg.content);
+                        return (
+                          <div style={{ borderRadius: '14px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', padding: '14px 16px' }}>
+                            {renderMarkdown(msg.content, true)}
+                          </div>
+                        );
                       })()}
                     </div>
                   </div>
@@ -634,62 +841,49 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, liveStep
             ))}
 
             {isLoading && (() => {
-              const consolidated = consolidateSteps(liveSteps);
-              const currentLabel = consolidated.length > 0
-                ? (consolidated.filter(s => !s.done).pop()?.label || consolidated[consolidated.length - 1].label)
-                : 'Analyzing wallet...';
-              const doneCount = consolidated.filter(s => s.done && s.tool_name).length;
-              const totalTools = consolidated.filter(s => s.tool_name).length;
+              // Fall back to lastStepsRef when liveSteps is momentarily cleared during the loading→done transition
+              const stepsToRender = liveSteps.length > 0 ? liveSteps : lastStepsRef.current;
+              const consolidated = consolidateSteps(stepsToRender);
+              const lastRaw = stepsToRender.length > 0 ? stepsToRender[stepsToRender.length - 1] : null;
 
               return (
                 <div style={{ marginTop: '20px', animation: 'fadeIn 0.3s ease-out' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px' }}>
+                  <div style={{ marginBottom: '8px' }}>
                     <span style={{ fontSize: '11px', fontWeight: 600, color: '#10b981', letterSpacing: '0.03em' }}>ELSA</span>
                   </div>
-                  <div
-                    style={{ borderRadius: '14px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', padding: '14px 16px', cursor: consolidated.length > 0 ? 'pointer' : 'default' }}
-                    onClick={() => consolidated.length > 0 && setStepsExpanded(v => !v)}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          {[0, 1, 2].map((i) => (
-                            <div key={i} style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: '#10b981', animation: `elsa-dot 1.4s ease-in-out ${i * 0.2}s infinite` }} />
-                          ))}
+                  <div style={{ borderRadius: '14px', backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', padding: '14px 16px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {consolidated.length === 0 ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ display: 'flex', gap: '3px' }}>
+                            {[0, 1, 2].map(i => (
+                              <div key={i} style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#10b981', animation: `elsa-dot 1.4s ease-in-out ${i * 0.2}s infinite` }} />
+                            ))}
+                          </div>
+                          <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.35)' }}>Analyzing wallet...</span>
                         </div>
-                        <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>{currentLabel}</span>
-                      </div>
-                      {totalTools > 0 && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.15)' }}>{doneCount}/{totalTools}</span>
-                          {stepsExpanded
-                            ? <ChevronUp style={{ width: '13px', height: '13px', color: 'rgba(255,255,255,0.15)' }} strokeWidth={1.5} />
-                            : <ChevronDown style={{ width: '13px', height: '13px', color: 'rgba(255,255,255,0.15)' }} strokeWidth={1.5} />
-                          }
-                        </div>
-                      )}
+                      ) : consolidated.map((step, i) => {
+                        const Icon = step.tool_name ? (TOOL_ICONS[step.tool_name] || Brain) : Brain;
+                        const isActive = !step.done;
+                        const displayLabel = isActive && lastRaw ? lastRaw.message : step.label;
+                        return (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {step.done
+                              ? <CheckCircle2 style={{ width: '12px', height: '12px', color: 'rgba(16,185,129,0.5)', flexShrink: 0 }} strokeWidth={1.5} />
+                              : <Icon style={{ width: '12px', height: '12px', color: '#10b981', flexShrink: 0, animation: 'elsa-dot 1.4s ease-in-out infinite' }} strokeWidth={1.5} />
+                            }
+                            <span style={{ fontSize: '12px', color: step.done ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)', fontWeight: step.done ? 400 : 500, transition: 'color 0.2s' }}>
+                              {displayLabel}
+                            </span>
+                            {step.time_ms != null && (
+                              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.12)', marginLeft: 'auto' }}>
+                                {step.time_ms > 1000 ? `${(step.time_ms / 1000).toFixed(1)}s` : `${step.time_ms}ms`}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                    {stepsExpanded && consolidated.length > 0 && (
-                      <div style={{ marginTop: '10px', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        {consolidated.map((step, i) => {
-                          const Icon = step.tool_name ? (TOOL_ICONS[step.tool_name] || Brain) : Brain;
-                          return (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 4px' }}>
-                              {step.done
-                                ? <CheckCircle2 style={{ width: '11px', height: '11px', color: 'rgba(16,185,129,0.4)', flexShrink: 0 }} strokeWidth={1.5} />
-                                : <Icon style={{ width: '11px', height: '11px', color: '#10b981', flexShrink: 0, animation: 'elsa-dot 1.4s ease-in-out infinite' }} strokeWidth={1.5} />
-                              }
-                              <span style={{ fontSize: '11px', color: step.done ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.45)', fontWeight: step.done ? 400 : 500 }}>{step.label}</span>
-                              {step.done && step.time_ms != null && (
-                                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.1)', marginLeft: 'auto' }}>
-                                  {step.time_ms > 1000 ? `${(step.time_ms / 1000).toFixed(1)}s` : `${step.time_ms}ms`}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
                 </div>
               );
@@ -702,7 +896,7 @@ export default function ChatPanel({ messages, onSendMessage, isLoading, liveStep
 
       {/* Bottom input area */}
       {messages.length > 0 && (
-        <div style={{ padding: '8px 24px 20px', background: 'linear-gradient(0deg, #090909 60%, transparent)', position: 'relative' }}>
+        <div style={{ padding: '8px 24px 28px', background: 'linear-gradient(0deg, #090909 60%, transparent)', position: 'relative' }}>
           {/* Fade edge */}
           <div style={{ position: 'absolute', top: '-24px', left: 0, right: 0, height: '24px', background: 'linear-gradient(0deg, #090909, transparent)', pointerEvents: 'none' }} />
           <div style={{ maxWidth: '640px', margin: '0 auto' }}>

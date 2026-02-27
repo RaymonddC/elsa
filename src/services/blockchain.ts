@@ -6,28 +6,29 @@
 import { z } from 'zod';
 
 // Response schema from blockchain.info/rawaddr
+// Uses .nullish() + .transform() for fields that can be null in coinbase/OP_RETURN outputs
 const BlockchainTxSchema = z.object({
   hash: z.string(),
   ver: z.number().optional(),
   size: z.number().optional(),
   weight: z.number().optional(),
-  fee: z.number().default(0),
+  fee: z.number().nullish().transform(v => v ?? 0),
   time: z.number(),
   block_height: z.number().optional(),
   result: z.number(),
   balance: z.number().optional(),
   inputs: z.array(z.object({
     prev_out: z.object({
-      addr: z.string().optional(),
-      value: z.number(),
+      addr: z.string().nullish().transform(v => v ?? undefined),
+      value: z.number().nullish().transform(v => v ?? 0),
       spent: z.boolean().optional(),
-    }).optional(),
-  })).default([]),
+    }).nullish().transform(v => v ?? undefined),
+  })).nullish().transform(v => v ?? []),
   out: z.array(z.object({
-    addr: z.string().optional(),
-    value: z.number(),
+    addr: z.string().nullish().transform(v => v ?? undefined),
+    value: z.number().nullish().transform(v => v ?? 0),
     spent: z.boolean().optional(),
-  })).default([]),
+  })).nullish().transform(v => v ?? []),
 });
 
 const BlockchainAddressResponseSchema = z.object({
@@ -38,7 +39,7 @@ const BlockchainAddressResponseSchema = z.object({
   total_received: z.number(),
   total_sent: z.number(),
   final_balance: z.number(),
-  txs: z.array(BlockchainTxSchema).default([]),
+  txs: z.array(BlockchainTxSchema).nullish().transform(v => v ?? []),
 });
 
 export type BlockchainAddressResponse = z.infer<typeof BlockchainAddressResponseSchema>;

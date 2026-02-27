@@ -4,7 +4,7 @@
 
 import { esClient, WALLET_TX_INDEX, WALLET_SUMMARY_INDEX } from '../config/elasticsearch';
 import { fetchWalletFromBlockchain, satoshiToBTC, detectChain } from '../services/blockchain';
-import { fetchEthBalance, fetchEthTransactions, fetchEthTokenTransactions, weiToETH, tokenToDecimal, fetchTokenPricesUSD } from '../services/etherscan';
+import { fetchEthBalance, fetchEthTransactions, fetchEthTokenTransactions, weiToETH, tokenToDecimal, fetchTokenPricesUSD, type EtherscanTx, type EtherscanTokenTx } from '../services/etherscan';
 import type { WalletTransaction, WalletSummary } from '../types/wallet';
 import { z } from 'zod';
 
@@ -77,7 +77,7 @@ export const TOOL_DEFINITIONS = [
                     },
                     limit: {
                         type: 'number',
-                        description: 'Number of transactions to fetch (default: 50, max: 100)',
+                        description: 'Number of transactions to fetch (default: 500, max: 2000). Paginates automatically.',
                         default: 50,
                     },
                     chain: {
@@ -150,16 +150,16 @@ export const TOOL_DEFINITIONS = [
     },
 ];
 
-async function executeFetchWalletData(params: z.infer<typeof FetchWalletParamsSchema>) {
+async function executeFetchWalletData(params: z.infer<typeof FetchWalletParamsSchema>, onProgress?: (msg: string) => void) {
     const startTime = Date.now();
     const chain = params.chain || detectChain(params.address);
-    const limit = Math.min(params.limit || 50, 100);
+    const limit = Math.min(params.limit || 250, 2000);
     const now = new Date().toISOString();
 
     if (chain === 'bitcoin') {
         return await fetchBitcoinWallet(params.address, limit, now, startTime);
     } else {
-        return await fetchEthereumWallet(params.address, limit, now, startTime);
+        return await fetchEthereumWallet(params.address, limit, now, startTime, onProgress);
     }
 }
 
@@ -232,12 +232,49 @@ async function fetchBitcoinWallet(address: string, limit: number, now: string, s
     };
 }
 
-async function fetchEthereumWallet(address: string, limit: number, now: string, startTime: number) {
-    const tokenLimit = Math.min(limit * 3, 300);
+/** Fetch all pages from Etherscan until we have `maxTotal` records or no more pages */
+async function fetchAllEthTransactions(
+    address: string,
+    maxTotal: number,
+    onProgress?: (msg: string) => void,
+): Promise<EtherscanTx[]> {
+    const PAGE_SIZE = 1000;
+    const all: EtherscanTx[] = [];
+    let page = 1;
+    while (all.length < maxTotal) {
+        const batch = await fetchEthTransactions(address, page, PAGE_SIZE, 'desc');
+        all.push(...batch);
+        onProgress?.(page === 1 ? `Fetching transactions...` : `Fetching transactions... page ${page}`);
+        if (batch.length < PAGE_SIZE) break;
+        page++;
+    }
+    return all.slice(0, maxTotal);
+}
+
+async function fetchAllTokenTransactions(
+    address: string,
+    maxTotal: number,
+    onProgress?: (msg: string) => void,
+): Promise<EtherscanTokenTx[]> {
+    const PAGE_SIZE = 1000;
+    const all: EtherscanTokenTx[] = [];
+    let page = 1;
+    while (all.length < maxTotal) {
+        const batch = await fetchEthTokenTransactions(address, page, PAGE_SIZE, 'desc');
+        all.push(...batch);
+        onProgress?.(page === 1 ? `Fetching token transfers...` : `Fetching token transfers... page ${page}`);
+        if (batch.length < PAGE_SIZE) break;
+        page++;
+    }
+    return all.slice(0, maxTotal);
+}
+
+async function fetchEthereumWallet(address: string, limit: number, now: string, startTime: number, onProgress?: (msg: string) => void) {
+    const tokenLimit = limit * 3;
     const [balanceWei, ethTxs, tokenTxs] = await Promise.all([
         fetchEthBalance(address),
-        fetchEthTransactions(address, 1, limit, 'desc'),
-        fetchEthTokenTransactions(address, 1, tokenLimit, 'desc'),
+        fetchAllEthTransactions(address, limit, onProgress),
+        fetchAllTokenTransactions(address, tokenLimit, onProgress),
     ]);
 
     const addressLower = address.toLowerCase();
@@ -693,11 +730,11 @@ async function executeDetectAnomalies(params: z.infer<typeof DetectAnomaliesPara
     };
 }
 
-export async function executeTool(toolName: string, args: any) {
+export async function executeTool(toolName: string, args: any, onProgress?: (msg: string) => void) {
     switch (toolName) {
         case 'fetch_wallet_data': {
             const params = FetchWalletParamsSchema.parse(args);
-            return await executeFetchWalletData(params);
+            return await executeFetchWalletData(params, onProgress);
         }
         case 'search_transactions': {
             const params = SearchTransactionsParamsSchema.parse(args);
