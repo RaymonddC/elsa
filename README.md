@@ -1,110 +1,145 @@
-# ELSA - AI Log Analysis Agent
+# ELSA — AI Wallet Analyzer with Glass Box Reasoning
 
-An AI-powered log analysis agent with "Glass Box" transparency that shows its reasoning process.
+A multi-chain (Bitcoin + Ethereum) wallet analysis platform powered by an OpenAI function-calling agent. Every query the agent runs and every decision it makes is exposed in a "Glass Box" reasoning panel, so users can see the chain of evidence behind each finding.
 
-## Features
+**Live demo:** https://project-30dd0d97-4e23-4201-ac7.web.app
 
-- **Intelligent Log Analysis**: Uses LLM to analyze application logs and detect anomalies
-- **Glass Box UI**: See exactly what queries the agent runs and how it reasons
-- **Elasticsearch Backend**: Fast, scalable log storage and search
-- **Modern Stack**: Node.js, TypeScript, React, OpenAI
+## What it does
 
-## Quick Start
+Ask natural-language questions about any Bitcoin or Ethereum wallet:
 
-### 1. Prerequisites
+- "What's this wallet's balance and recent activity?"
+- "Show me all incoming transactions over 1 ETH in the last 30 days."
+- "Are there any anomalies in this address's transaction history?"
+- "Break down ERC-20 token holdings with USD valuations."
 
-- Node.js 18+ and npm
-- Docker and Docker Compose
-- OpenAI API key
+The agent fetches on-chain data, caches it in Elasticsearch for fast filtered search, and runs custom anomaly detection — surfacing outliers, mixing patterns, and dormant-wallet reactivation.
 
-### 2. Setup
+## How it works
 
-```bash
-# Install dependencies
-npm install
+ELSA is a real OpenAI **function-calling agent loop**, not a single-shot prompt. The agent has access to four tools and chooses which to call (and in what order) based on the user's question.
 
-# Copy environment file and add your OpenAI API key
-cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
+### Tools
 
-# Start Elasticsearch and Kibana
-docker-compose up -d
+| Tool | What it does |
+|------|--------------|
+| `fetch_wallet_data` | Calls blockchain.com (BTC) or Etherscan (ETH) APIs, normalizes transactions to a common schema, and indexes them in Elasticsearch. For Ethereum, also fetches ERC-20 transfers and pulls USD pricing per token. |
+| `search_transactions` | Elasticsearch-backed filtered query: direction, value range, time range, sort order. |
+| `get_wallet_summary` | Returns the cached summary (balance, totals, first/last seen, per-token breakdown). |
+| `detect_anomalies` | Runs custom statistical detection (see below) at low/medium/high sensitivity. |
 
-# Wait for Elasticsearch to be ready (check health)
-docker-compose ps
-```
+### Anomaly detection
 
-### 3. Initialize and Generate Data
+The detection logic is hand-coded, not LLM-based — keeping it deterministic and auditable:
 
-```bash
-# Initialize the Elasticsearch index
-npm run init-index
+- **Large transactions** — values beyond N standard deviations from the wallet's mean
+- **Rapid sequences** — clusters of 3+ transactions within a short window (potential mixing or automation)
+- **Round-number transactions** — possible structured payments
+- **Dormant reactivation** — wallet inactive for 90+ days, then suddenly active
+- **Fan-out / fan-in (Bitcoin)** — high-output or high-input transactions, common in mixing or consolidation
+- **Failed transactions (Ethereum)** — `isError === '1'` patterns
+- **Gas price spikes (Ethereum)** — gas price 3× above wallet average
 
-# Generate sample incident logs
-npm run generate-logs
-```
+### Glass Box reasoning UI
 
-### 4. Run the Backend
+The frontend's `ReasoningPanel.tsx` streams the agent's tool calls in real time, showing the exact Elasticsearch query, the input parameters, the execution time, and the raw output. Users can audit how a conclusion was reached, not just trust it.
 
-```bash
-# Development mode with hot reload
-npm run dev
+## Tech stack
 
-# Or build and run
-npm run build
-npm start
-```
+**Backend**
+- Node.js + TypeScript + Express
+- OpenAI SDK (function calling)
+- Elasticsearch 8.11 (transaction cache + summary index)
+- Zod for request/response validation
+- Google OAuth (`google-auth-library`) + JWT auth
+- Persisted chat history
 
-### 5. Run the Frontend
+**Frontend**
+- React 18 + Vite + Tailwind CSS
+- Components: `ChatPanel`, `ChatSidebar`, `ReasoningPanel`, `WalletDashboardCard`, `TransactionChart`, `TokenActivity`
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+**Infrastructure**
+- Firebase Hosting (frontend)
+- Docker + `docker-compose.prod.yml` (backend)
+- GitHub Actions: `deploy-frontend.yml`, `deploy-backend.yml`
 
-Access the app at `http://localhost:5173`
-
-## Project Structure
+## Project structure
 
 ```
 elsa/
-├── src/
+├── src/                          # Backend
 │   ├── agent/
-│   │   ├── tools.ts         # OpenAI function definitions
-│   │   └── orchestrator.ts  # Agent loop with Glass Box logging
-│   ├── config/
-│   │   └── elasticsearch.ts # ES client setup
-│   └── index.ts             # Express server
-├── scripts/
-│   ├── init_elasticsearch.ts    # Create index with mapping
-│   └── generate_incident.ts     # Generate realistic log data
+│   │   ├── orchestrator.ts       # Agent loop with Glass Box logging
+│   │   └── tools.ts              # OpenAI function definitions + executors
+│   ├── services/
+│   │   ├── blockchain.ts         # blockchain.com API client (BTC)
+│   │   ├── etherscan.ts          # Etherscan API client (ETH + ERC-20)
+│   │   ├── auth.ts               # Google OAuth verification
+│   │   └── chatHistory.ts        # Chat persistence
+│   ├── routes/                   # auth.ts, chats.ts
+│   ├── config/elasticsearch.ts   # ES client + index names
+│   └── index.ts                  # Express server entry
 ├── frontend/
 │   └── src/
 │       ├── components/
-│       │   ├── ChatInterface.tsx
-│       │   └── GlassBox.tsx
+│       │   ├── ChatPanel.tsx
+│       │   ├── ReasoningPanel.tsx     # The "Glass Box"
+│       │   ├── WalletDashboardCard.tsx
+│       │   ├── TransactionChart.tsx
+│       │   └── TokenActivity.tsx
+│       ├── contexts/
 │       └── App.tsx
-├── docker-compose.yml
-└── package.json
+├── docker-compose.yml            # Local dev (ES + Kibana)
+├── docker-compose.prod.yml       # Production backend
+├── firebase.json                 # Firebase Hosting config
+└── .github/workflows/            # CI/CD
 ```
 
-## Usage
+## Running locally
 
-1. Open the web interface
-2. Ask questions like:
-   - "What errors happened in the last hour?"
-   - "Show me all authentication failures"
-   - "Are there any anomalies in the logs?"
-3. Watch the Glass Box panel to see the agent's reasoning and queries
+### Prerequisites
 
-## Tech Stack
+- Node.js 18+ and npm
+- Docker and Docker Compose
+- An OpenAI API key
+- An Etherscan API key (free tier is fine)
 
-- **Backend**: Node.js, TypeScript, Express
-- **Database**: Elasticsearch 8.11
-- **AI**: OpenAI GPT-4
-- **Frontend**: React, Vite, Tailwind CSS
-- **Validation**: Zod
+### Setup
+
+```bash
+# 1. Install dependencies
+npm install
+cd frontend && npm install && cd ..
+
+# 2. Configure environment
+cp .env.example .env
+# Edit .env: OPENAI_API_KEY, ETHERSCAN_API_KEY, GOOGLE_CLIENT_ID, JWT_SECRET
+
+# 3. Start Elasticsearch (and Kibana for debugging)
+docker-compose up -d
+
+# 4. Initialize the indices
+npm run init-index
+
+# 5. Run backend + frontend together
+npm run dev
+```
+
+The frontend is served at `http://localhost:5173`, backend at `http://localhost:3000`.
+
+## API endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/auth/google` | Verify a Google ID token, issue a JWT |
+| `GET`  | `/chats` | List the user's chat history |
+| `POST` | `/chats/:id/messages` | Send a message to the agent and stream tool calls back |
+
+## Notes
+
+- Anomaly thresholds are configurable per request (`low` / `medium` / `high` sensitivity), letting users trade false positives against missed signals.
+- The backend deletes and re-indexes a wallet's transactions on each fetch — keeping the cache consistent with chain state without requiring deduplication logic.
+- All numeric outputs are sanitized through `safeFloat`/`sanitizeObject` to handle `Infinity`/`NaN` cleanly before they reach Elasticsearch (which rejects them).
 
 ## License
 
